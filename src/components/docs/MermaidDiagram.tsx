@@ -260,12 +260,6 @@ export default function MermaidDiagram({ chart }: MermaidDiagramProps) {
           },
         });
 
-        const isValid = await mermaid.parse(chart, { suppressErrors: true });
-        if (!isValid) {
-          if (!cancelled) setError(true);
-          return;
-        }
-
         const id = `mermaid-${Math.random().toString(36).slice(2, 9)}`;
         const { svg: renderedSvg } = await mermaid.render(id, chart);
 

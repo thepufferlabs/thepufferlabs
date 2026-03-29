@@ -136,7 +136,7 @@ export default async function DocPage({ params }: PageProps) {
             </div>
           )}
 
-          <MarkdownRenderer content={content} />
+          <MarkdownRenderer content={content} repo={repo} />
 
           {/* Prev / Next navigation */}
           <div className="mt-16 pt-8 border-t border-white/5 flex items-center justify-between gap-4">
