@@ -8,15 +8,9 @@ import type { Components } from "react-markdown";
 
 interface MarkdownRendererProps {
   content: string;
-  repo?: string;
 }
 
-function buildComponents(repo?: string): Components {
-  const basePath = typeof window === "undefined"
-    ? (process.env.NEXT_PUBLIC_BASE_PATH ?? "")
-    : (process.env.NEXT_PUBLIC_BASE_PATH ?? "");
-
-  return {
+const components: Components = {
   pre({ children }) {
     // Extract props from the nested <code> element
     const child = children as React.ReactElement<{
@@ -74,20 +68,9 @@ function buildComponents(repo?: string): Components {
     );
   },
   a({ href, children }) {
-    let resolvedHref = href ?? "";
-
-    // Rewrite relative .md links to docs route when repo is known
-    if (repo && resolvedHref && !resolvedHref.startsWith("http") && !resolvedHref.startsWith("#")) {
-      // e.g. "docs/ARCHITECTURE.md" → "/docs/Dotnetty/docs/ARCHITECTURE/"
-      const cleaned = resolvedHref
-        .replace(/^\.?\/?/, "")   // strip leading ./ or /
-        .replace(/\.md$/, "");     // strip .md extension
-      resolvedHref = `${basePath}/docs/${repo}/${cleaned}/`;
-    }
-
     return (
       <a
-        href={resolvedHref}
+        href={href}
         className="text-teal hover:text-teal/80 underline underline-offset-2 decoration-teal/30 transition-colors"
         target={href?.startsWith("http") ? "_blank" : undefined}
         rel={href?.startsWith("http") ? "noopener noreferrer" : undefined}
@@ -112,11 +95,9 @@ function buildComponents(repo?: string): Components {
   hr() {
     return <hr className="my-8 border-white/5" />;
   },
-  };
-}
+};
 
-export default function MarkdownRenderer({ content, repo }: MarkdownRendererProps) {
-  const components = buildComponents(repo);
+export default function MarkdownRenderer({ content }: MarkdownRendererProps) {
   return (
     <div className="prose-puffer">
       <ReactMarkdown
