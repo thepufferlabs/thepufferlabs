@@ -59,12 +59,7 @@ export default function LanguageIcon({ language, size = 16, className }: Languag
 
   if (!Icon) {
     // Fallback: colored dot
-    return (
-      <span
-        className={`inline-block rounded-full shrink-0 ${className ?? ""}`}
-        style={{ width: size * 0.7, height: size * 0.7, backgroundColor: "#6B7280" }}
-      />
-    );
+    return <span className={`inline-block rounded-full shrink-0 ${className ?? ""}`} style={{ width: size * 0.7, height: size * 0.7, backgroundColor: "#6B7280" }} />;
   }
 
   return <Icon size={size} className={className} />;

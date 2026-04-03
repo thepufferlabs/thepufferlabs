@@ -9,26 +9,13 @@ export default function About() {
     <SectionWrapper id="about">
       <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
         <div>
-          <SectionHeading
-            label="About"
-            title="What is ThePufferLabs?"
-            align="left"
-          />
+          <SectionHeading label="About" title="What is The Puffer Labs?" align="left" />
           <div className="space-y-5 text-text-muted leading-relaxed -mt-8">
             <p>
-              Most engineering resources teach you <em>how</em> to use tools.
-              ThePufferLabs teaches you <strong className="text-text-primary font-medium">how to think</strong>.
+              Most engineering resources teach you <em>how</em> to use tools. The Puffer Labs teaches you <strong className="text-text-primary font-medium">how to think</strong>.
             </p>
-            <p>
-              We bridge the gap between writing code and designing systems —
-              helping engineers develop the architectural intuition that
-              separates senior engineers from the rest.
-            </p>
-            <p>
-              Through deep technical content, system design breakdowns, and
-              hands-on consulting, ThePufferLabs equips you to navigate complexity
-              with confidence.
-            </p>
+            <p>We bridge the gap between writing code and designing systems — helping engineers develop the architectural intuition that separates senior engineers from the rest.</p>
+            <p>Through deep technical content, system design breakdowns, and hands-on consulting, The Puffer Labs equips you to navigate complexity with confidence.</p>
           </div>
         </div>
 
@@ -42,7 +29,9 @@ export default function About() {
               <span className="ml-2 text-xs text-text-dim">growth.ts</span>
             </div>
             <div className="space-y-1 text-text-dim">
-              <p><span className="text-teal">const</span> engineer = {"{"}</p>
+              <p>
+                <span className="text-teal">const</span> engineer = {"{"}
+              </p>
               <p className="pl-4">
                 <span className="text-text-muted">level</span>: <span className="text-lime">&quot;junior&quot;</span>,
               </p>
@@ -55,9 +44,11 @@ export default function About() {
               <p>{"}"}</p>
               <p className="mt-3 text-text-dim">
                 <span className="text-text-dim">{"// "}</span>
-                <span className="text-teal/60 italic">After ThePufferLabs...</span>
+                <span className="text-teal/60 italic">After The Puffer Labs...</span>
               </p>
-              <p className="mt-1"><span className="text-teal">const</span> architect = {"{"}</p>
+              <p className="mt-1">
+                <span className="text-teal">const</span> architect = {"{"}
+              </p>
               <p className="pl-4">
                 <span className="text-text-primary">level</span>: <span className="text-lime">&quot;senior+&quot;</span>,
               </p>
@@ -72,13 +63,7 @@ export default function About() {
 
             {/* Mascot peeking from corner */}
             <div className="absolute -bottom-6 -right-6">
-              <Image
-                src={`${basePath}/logos/puffer-navy-sm.png`}
-                alt="ThePufferLabs mascot"
-                width={80}
-                height={80}
-                className="object-contain drop-shadow-[0_0_20px_rgba(45,212,191,0.2)]"
-              />
+              <Image src={`${basePath}/logos/puffer-navy-sm.png`} alt="The Puffer Labs mascot" width={80} height={80} className="object-contain drop-shadow-[0_0_20px_rgba(45,212,191,0.2)]" />
             </div>
           </div>
           {/* Decorative glow */}

@@ -1,27 +1,81 @@
 @import "tailwindcss";
 
-@theme inline {
-  --color-navy: #0F172A;
-  --color-navy-light: #1E293B;
+/*
+ * Use @theme (not inline) so Tailwind generates --color-* CSS custom properties.
+ * These are the dark theme defaults. [data-theme="light"] overrides them below.
+ */
+@theme {
+  --color-navy: #0f172a;
+  --color-navy-light: #1e293b;
   --color-navy-lighter: #334155;
-  --color-teal: #2DD4BF;
-  --color-teal-dark: #14B8A6;
-  --color-lime: #A3E635;
-  --color-lime-dark: #84CC16;
-  --color-text-primary: #E2E8F0;
-  --color-text-muted: #94A3B8;
-  --color-text-dim: #64748B;
+  --color-teal: #2dd4bf;
+  --color-teal-dark: #14b8a6;
+  --color-lime: #a3e635;
+  --color-lime-dark: #84cc16;
+  --color-text-primary: #e2e8f0;
+  --color-text-muted: #94a3b8;
+  --color-text-dim: #64748b;
   --color-glass: rgba(15, 23, 42, 0.6);
   --color-glass-border: rgba(45, 212, 191, 0.1);
   --color-glow-teal: rgba(45, 212, 191, 0.15);
   --color-glow-lime: rgba(163, 230, 53, 0.1);
+  --color-surface: #0b1120;
+  --color-code-bg: #0b1120;
+  --color-btn-text: #0f172a;
   --font-sans: "Inter", "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: "SF Mono", "Cascadia Code", "Fira Code", "JetBrains Mono", Consolas, monospace;
 }
 
+/* ── Dark theme extras (non-Tailwind variables) ── */
+:root,
+[data-theme="dark"] {
+  --theme-border: rgba(255, 255, 255, 0.05);
+  --theme-white-alpha-5: rgba(255, 255, 255, 0.05);
+  --theme-white-alpha-10: rgba(255, 255, 255, 0.1);
+  --theme-prose-text: #cbd5e1;
+  --theme-prose-heading: #e2e8f0;
+  --theme-prose-border: rgba(255, 255, 255, 0.05);
+  --theme-selection-bg: rgba(45, 212, 191, 0.3);
+  --theme-selection-color: #e2e8f0;
+  --theme-scrollbar: #334155;
+  --theme-edgelabel-bg: #0f172a;
+  --theme-overlay: rgba(11, 17, 32, 0.95);
+}
+
+/* ── Light theme ── */
+[data-theme="light"] {
+  /* Override Tailwind-generated --color-* vars */
+  --color-navy: #ffffff;
+  --color-navy-light: #f1f5f9;
+  --color-navy-lighter: #cbd5e1;
+  --color-teal: #0d9488;
+  --color-teal-dark: #0f766e;
+  --color-text-primary: #0f172a;
+  --color-text-muted: #475569;
+  --color-text-dim: #64748b;
+  --color-glass: rgba(255, 255, 255, 0.7);
+  --color-glass-border: rgba(14, 165, 150, 0.15);
+  --color-surface: #f8fafc;
+  --color-code-bg: #f1f5f9;
+  --color-btn-text: #ffffff;
+
+  /* Non-Tailwind theme variables */
+  --theme-border: rgba(0, 0, 0, 0.1);
+  --theme-white-alpha-5: rgba(0, 0, 0, 0.04);
+  --theme-white-alpha-10: rgba(0, 0, 0, 0.08);
+  --theme-prose-text: #334155;
+  --theme-prose-heading: #0f172a;
+  --theme-prose-border: rgba(0, 0, 0, 0.08);
+  --theme-selection-bg: rgba(13, 148, 136, 0.2);
+  --theme-selection-color: #0f172a;
+  --theme-scrollbar: #cbd5e1;
+  --theme-edgelabel-bg: #ffffff;
+  --theme-overlay: rgba(248, 250, 252, 0.95);
+}
+
 * {
   scrollbar-width: thin;
-  scrollbar-color: #334155 transparent;
+  scrollbar-color: var(--theme-scrollbar) transparent;
 }
 
 html {
@@ -29,19 +83,27 @@ html {
 }
 
 body {
-  background: #0F172A;
-  color: #E2E8F0;
+  background: var(--color-navy);
+  color: var(--color-text-primary);
   font-family: var(--font-sans), system-ui, sans-serif;
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease;
 }
 
 ::selection {
-  background: rgba(45, 212, 191, 0.3);
-  color: #E2E8F0;
+  background: var(--theme-selection-bg);
+  color: var(--theme-selection-color);
 }
 
 @keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-10px); }
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
 }
 
 .animate-float {
@@ -50,7 +112,7 @@ body {
 
 /* Prose styles for markdown content */
 .prose-puffer {
-  color: #CBD5E1;
+  color: var(--theme-prose-text);
   line-height: 1.8;
   font-size: 0.9375rem;
 }
@@ -58,7 +120,7 @@ body {
 .prose-puffer h1 {
   font-size: 2rem;
   font-weight: 700;
-  color: #E2E8F0;
+  color: var(--theme-prose-heading);
   margin-top: 0;
   margin-bottom: 1rem;
   line-height: 1.2;
@@ -68,18 +130,18 @@ body {
 .prose-puffer h2 {
   font-size: 1.5rem;
   font-weight: 600;
-  color: #E2E8F0;
+  color: var(--theme-prose-heading);
   margin-top: 2.5rem;
   margin-bottom: 0.75rem;
   padding-bottom: 0.5rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid var(--theme-prose-border);
   line-height: 1.3;
 }
 
 .prose-puffer h3 {
   font-size: 1.2rem;
   font-weight: 600;
-  color: #E2E8F0;
+  color: var(--theme-prose-heading);
   margin-top: 2rem;
   margin-bottom: 0.5rem;
   line-height: 1.4;
@@ -88,7 +150,7 @@ body {
 .prose-puffer h4 {
   font-size: 1.05rem;
   font-weight: 600;
-  color: #CBD5E1;
+  color: var(--theme-prose-text);
   margin-top: 1.5rem;
   margin-bottom: 0.5rem;
 }
@@ -123,12 +185,12 @@ body {
 
 .prose-puffer strong {
   font-weight: 600;
-  color: #E2E8F0;
+  color: var(--theme-prose-heading);
 }
 
 .prose-puffer em {
   font-style: italic;
-  color: #94A3B8;
+  color: var(--color-text-muted);
 }
 
 .prose-puffer > :first-child {
@@ -137,8 +199,6 @@ body {
 
 /* -------------------------------------------------------
    Mermaid diagram theme overrides
-   Colors are replaced in the SVG string by recolorSvg().
-   These CSS rules are safety nets for edge cases.
    ------------------------------------------------------- */
 
 .mermaid-themed svg {
@@ -146,25 +206,22 @@ body {
   font-family: "SF Mono", "Cascadia Code", "Fira Code", monospace !important;
 }
 
-/* Ensure all text is visible */
 .mermaid-themed text,
 .mermaid-themed tspan {
-  fill: #E2E8F0 !important;
+  fill: var(--color-text-primary) !important;
 }
 
-/* foreignObject HTML labels */
 .mermaid-themed foreignObject div,
 .mermaid-themed foreignObject span,
 .mermaid-themed foreignObject p {
-  color: #E2E8F0 !important;
+  color: var(--color-text-primary) !important;
 }
 
-/* Edge label text slightly muted */
 .mermaid-themed .edgeLabel span {
-  color: #94A3B8 !important;
-  background: #0F172A !important;
+  color: var(--color-text-muted) !important;
+  background: var(--theme-edgelabel-bg) !important;
 }
 
 .mermaid-themed .edgeLabel rect {
-  fill: #0F172A !important;
+  fill: var(--theme-edgelabel-bg) !important;
 }

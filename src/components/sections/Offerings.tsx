@@ -37,24 +37,14 @@ const icons: Record<string, React.ReactNode> = {
 export default function Offerings() {
   return (
     <SectionWrapper id="learn">
-      <SectionHeading
-        label="Learn"
-        title="What You'll Find Here"
-        description="Resources designed for engineers who want to move beyond implementation and into the architecture layer."
-      />
+      <SectionHeading label="Learn" title="What You'll Find Here" description="Resources designed for engineers who want to move beyond implementation and into the architecture layer." />
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {OFFERINGS.map((item) => (
           <Card key={item.title} className="group">
-            <div className="mb-5 inline-flex items-center justify-center w-12 h-12 rounded-xl bg-teal/10 border border-teal/10 group-hover:border-teal/20 transition-colors">
-              {icons[item.icon]}
-            </div>
-            <h3 className="text-lg font-semibold text-text-primary mb-2">
-              {item.title}
-            </h3>
-            <p className="text-sm text-text-muted leading-relaxed">
-              {item.description}
-            </p>
+            <div className="mb-5 inline-flex items-center justify-center w-12 h-12 rounded-xl bg-teal/10 border border-teal/10 group-hover:border-teal/20 transition-colors">{icons[item.icon]}</div>
+            <h3 className="text-lg font-semibold text-text-primary mb-2">{item.title}</h3>
+            <p className="text-sm text-text-muted leading-relaxed">{item.description}</p>
           </Card>
         ))}
       </div>

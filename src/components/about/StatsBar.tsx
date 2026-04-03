@@ -3,21 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 
 const stats = [
-  { label: "Years Experience", value: 10, suffix: "+" },
+  { label: "Years Experience", value: 11, suffix: "+" },
   { label: "Companies", value: 4, suffix: "" },
   { label: "Projects Delivered", value: 14, suffix: "+" },
   { label: "Team Members Led", value: 12, suffix: "+" },
 ];
 
-function AnimatedNumber({
-  target,
-  suffix,
-  visible,
-}: {
-  target: number;
-  suffix: string;
-  visible: boolean;
-}) {
+function AnimatedNumber({ target, suffix, visible }: { target: number; suffix: string; visible: boolean }) {
   const [current, setCurrent] = useState(0);
 
   useEffect(() => {
@@ -65,21 +57,15 @@ export default function StatsBar() {
   }, []);
 
   return (
-    <div ref={ref} className="relative border-y border-white/5 bg-white/[0.01]">
+    <div ref={ref} className="relative border-y border-[var(--theme-border)] bg-[var(--theme-white-alpha-5)]">
       <div className="max-w-6xl mx-auto px-6 lg:px-8 py-10">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
           {stats.map((stat) => (
             <div key={stat.label} className="text-center">
               <p className="text-3xl md:text-4xl font-bold text-teal mb-1">
-                <AnimatedNumber
-                  target={stat.value}
-                  suffix={stat.suffix}
-                  visible={visible}
-                />
+                <AnimatedNumber target={stat.value} suffix={stat.suffix} visible={visible} />
               </p>
-              <p className="text-xs text-text-dim font-mono uppercase tracking-wider">
-                {stat.label}
-              </p>
+              <p className="text-xs text-text-dim font-mono uppercase tracking-wider">{stat.label}</p>
             </div>
           ))}
         </div>

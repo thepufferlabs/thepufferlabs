@@ -9,15 +9,8 @@ const plans = [
     tier: "Open Source",
     price: "$0",
     period: "forever",
-    description:
-      "Collaborate on open-source projects together. Knowledge sharing, code reviews, and community-driven engineering.",
-    features: [
-      "Open-source collaboration",
-      "Code reviews & feedback",
-      "Community contributions",
-      "Shared learning",
-      "GitHub-first workflow",
-    ],
+    description: "Collaborate on open-source projects together. Knowledge sharing, code reviews, and community-driven engineering.",
+    features: ["Open-source collaboration", "Code reviews & feedback", "Community contributions", "Shared learning", "GitHub-first workflow"],
     cta: "Let\u2019s Collaborate",
     ctaHref: `mailto:${ownerEmail}?subject=Open%20Source%20Collaboration`,
     variant: "secondary" as const,
@@ -34,16 +27,8 @@ const plans = [
     tier: "Part-Time Consulting",
     price: "$50",
     period: "/hour",
-    description:
-      "Focused consulting sessions for architecture reviews, system design, and engineering strategy on your schedule.",
-    features: [
-      "Architecture reviews",
-      "System design guidance",
-      "Code & infra audits",
-      "1-on-1 strategy sessions",
-      "Async support via Slack/Email",
-      "Flexible scheduling",
-    ],
+    description: "Focused consulting sessions for architecture reviews, system design, and engineering strategy on your schedule.",
+    features: ["Architecture reviews", "System design guidance", "Code & infra audits", "1-on-1 strategy sessions", "Async support via Slack/Email", "Flexible scheduling"],
     cta: "Book a Session",
     ctaHref: `mailto:${ownerEmail}?subject=Part-Time%20Consulting%20Inquiry`,
     variant: "primary" as const,
@@ -60,16 +45,8 @@ const plans = [
     tier: "Full-Time",
     price: "Let\u2019s Talk",
     period: "",
-    description:
-      "Dedicated full-time engineering partnership. Embedded in your team, driving architecture and building systems that scale.",
-    features: [
-      "Embedded in your team",
-      "Full architecture ownership",
-      "Backend & frontend systems",
-      "Platform engineering",
-      "Team mentoring & growth",
-      "Long-term partnership",
-    ],
+    description: "Dedicated full-time engineering partnership. Embedded in your team, driving architecture and building systems that scale.",
+    features: ["Embedded in your team", "Full architecture ownership", "Backend & frontend systems", "Platform engineering", "Team mentoring & growth", "Long-term partnership"],
     cta: "Start a Conversation",
     ctaHref: `mailto:${ownerEmail}?subject=Full-Time%20Partnership%20Inquiry`,
     variant: "secondary" as const,
@@ -107,7 +84,7 @@ export default function Consulting() {
               className={`relative rounded-2xl transition-all duration-300 ${
                 plan.highlight
                   ? "border-2 border-teal/40 bg-gradient-to-b from-teal/[0.06] to-transparent shadow-[0_0_60px_rgba(45,212,191,0.08)] lg:-mt-4 lg:mb-[-16px]"
-                  : "border border-white/[0.06] bg-white/[0.02] hover:border-white/[0.12] hover:bg-white/[0.04]"
+                  : "border border-[var(--theme-border)] bg-[var(--theme-white-alpha-5)] hover:border-[var(--theme-white-alpha-10)] hover:bg-[var(--theme-white-alpha-5)]"
               }`}
             >
               {/* Badge */}
@@ -115,9 +92,7 @@ export default function Consulting() {
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                   <span
                     className={`inline-block px-3 py-1 rounded-full text-[10px] font-semibold tracking-wider uppercase ${
-                      plan.highlight
-                        ? "bg-teal text-navy"
-                        : "bg-white/10 text-text-muted border border-white/10"
+                      plan.highlight ? "bg-teal text-navy" : "bg-[var(--theme-white-alpha-10)] text-text-muted border border-[var(--theme-white-alpha-10)]"
                     }`}
                   >
                     {plan.badge}
@@ -128,73 +103,28 @@ export default function Consulting() {
               <div className="p-8">
                 {/* Icon + Tier */}
                 <div className="flex items-center gap-3 mb-6">
-                  <div
-                    className={`p-2.5 rounded-xl ${
-                      plan.highlight
-                        ? "bg-teal/10 text-teal"
-                        : "bg-white/5 text-text-muted"
-                    }`}
-                  >
-                    {plan.icon}
-                  </div>
-                  <h3 className="text-lg font-semibold text-text-primary">
-                    {plan.tier}
-                  </h3>
+                  <div className={`p-2.5 rounded-xl ${plan.highlight ? "bg-teal/10 text-teal" : "bg-[var(--theme-white-alpha-5)] text-text-muted"}`}>{plan.icon}</div>
+                  <h3 className="text-lg font-semibold text-text-primary">{plan.tier}</h3>
                 </div>
 
                 {/* Price */}
                 <div className="mb-5">
-                  <span
-                    className={`text-4xl font-bold tracking-tight ${
-                      plan.highlight
-                        ? "bg-gradient-to-r from-teal to-lime bg-clip-text text-transparent"
-                        : "text-text-primary"
-                    }`}
-                  >
-                    {plan.price}
-                  </span>
-                  {plan.period && (
-                    <span className="text-sm text-text-dim ml-1">
-                      {plan.period}
-                    </span>
-                  )}
+                  <span className={`text-4xl font-bold tracking-tight ${plan.highlight ? "bg-gradient-to-r from-teal to-lime bg-clip-text text-transparent" : "text-text-primary"}`}>{plan.price}</span>
+                  {plan.period && <span className="text-sm text-text-dim ml-1">{plan.period}</span>}
                 </div>
 
                 {/* Description */}
-                <p className="text-sm text-text-muted leading-relaxed mb-6">
-                  {plan.description}
-                </p>
+                <p className="text-sm text-text-muted leading-relaxed mb-6">{plan.description}</p>
 
                 {/* Divider */}
-                <div
-                  className={`h-px mb-6 ${
-                    plan.highlight ? "bg-teal/20" : "bg-white/5"
-                  }`}
-                />
+                <div className={`h-px mb-6 ${plan.highlight ? "bg-teal/20" : "bg-[var(--theme-white-alpha-5)]"}`} />
 
                 {/* Features */}
                 <ul className="space-y-3 mb-8">
                   {plan.features.map((feature) => (
-                    <li
-                      key={feature}
-                      className="flex items-start gap-2.5 text-sm text-text-muted"
-                    >
-                      <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 16 16"
-                        fill="none"
-                        className={`shrink-0 mt-0.5 ${
-                          plan.highlight ? "text-teal" : "text-text-dim"
-                        }`}
-                      >
-                        <path
-                          d="M13.5 4.5L6.5 11.5L2.5 7.5"
-                          stroke="currentColor"
-                          strokeWidth="1.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
+                    <li key={feature} className="flex items-start gap-2.5 text-sm text-text-muted">
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className={`shrink-0 mt-0.5 ${plan.highlight ? "text-teal" : "text-text-dim"}`}>
+                        <path d="M13.5 4.5L6.5 11.5L2.5 7.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
                       {feature}
                     </li>
@@ -202,12 +132,7 @@ export default function Consulting() {
                 </ul>
 
                 {/* CTA */}
-                <Button
-                  variant={plan.variant}
-                  size="lg"
-                  href={plan.ctaHref}
-                  className="w-full"
-                >
+                <Button variant={plan.variant} size="lg" href={plan.ctaHref} className="w-full">
                   {plan.cta}
                 </Button>
               </div>

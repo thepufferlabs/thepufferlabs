@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
 
 interface Milestone {
   year: string;
@@ -8,6 +9,7 @@ interface Milestone {
   role: string;
   company: string;
   companyShort: string;
+  logo?: string;
   type: "current" | "past";
   highlights: string[];
   tech: string[];
@@ -20,6 +22,7 @@ const milestones: Milestone[] = [
     role: "Associate Staff Engineer",
     company: "BD (Becton Dickinson)",
     companyShort: "BD",
+    logo: "/logos/companies/bd.png",
     type: "current",
     highlights: [
       "Architecting distributed MedTech products at enterprise scale",
@@ -34,6 +37,7 @@ const milestones: Milestone[] = [
     role: "Lead Software Engineer",
     company: "OpenText",
     companyShort: "OT",
+    logo: "/logos/companies/opentext.jpg",
     type: "past",
     highlights: [
       "Conducted thorough code reviews and assessed architecture for seamless legacy transition",
@@ -48,6 +52,7 @@ const milestones: Milestone[] = [
     role: "Associate Technical Architect",
     company: "Euromonitor International",
     companyShort: "EMI",
+    logo: "/logos/companies/euromonitor.png",
     type: "past",
     highlights: [
       "Designed scalable CosmosDB NoSQL models handling 500M+ records/month with medallion architecture",
@@ -63,6 +68,7 @@ const milestones: Milestone[] = [
     role: "Technical Lead",
     company: "Euromonitor International",
     companyShort: "EMI",
+    logo: "/logos/companies/euromonitor.png",
     type: "past",
     highlights: [
       "Modernized frontend applications using Angular, enhancing UX and performance",
@@ -77,6 +83,7 @@ const milestones: Milestone[] = [
     role: "Technical Lead",
     company: "Koch Business Solutions India",
     companyShort: "Koch",
+    logo: "/logos/companies/koch.png",
     type: "past",
     highlights: [
       "Spearheaded modernization of legacy applications to Angular",
@@ -92,12 +99,9 @@ const milestones: Milestone[] = [
     role: "Senior Programmer Analyst",
     company: "Koch Business Solutions India",
     companyShort: "Koch",
+    logo: "/logos/companies/koch.png",
     type: "past",
-    highlights: [
-      "Developed micro frontend architecture using Angular 12",
-      "Implemented AWS Cognito for secure authentication",
-      "Designed scalable .NET Core microservices on AWS ECS (Fargate)",
-    ],
+    highlights: ["Developed micro frontend architecture using Angular 12", "Implemented AWS Cognito for secure authentication", "Designed scalable .NET Core microservices on AWS ECS (Fargate)"],
     tech: ["Angular 12", "AWS Cognito", "ECS Fargate", ".NET Core"],
   },
   {
@@ -106,6 +110,7 @@ const milestones: Milestone[] = [
     role: "Programmer Analyst",
     company: "Koch Business Solutions India",
     companyShort: "Koch",
+    logo: "/logos/companies/koch.png",
     type: "past",
     highlights: [
       "Migrated legacy AngularJS application to Angular 8",
@@ -120,6 +125,7 @@ const milestones: Milestone[] = [
     role: "Software Developer",
     company: "PRATIAN Technologies",
     companyShort: "PT",
+    logo: "/logos/companies/pratian.png",
     type: "past",
     highlights: [
       "Developed and deployed scalable software products",
@@ -131,15 +137,10 @@ const milestones: Milestone[] = [
   },
 ];
 
-function TimelineCard({
-  milestone,
-  index,
-}: {
-  milestone: Milestone;
-  index: number;
-}) {
+function TimelineCard({ milestone, index }: { milestone: Milestone; index: number }) {
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
+  const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -160,70 +161,43 @@ function TimelineCard({
       {/* Timeline line + dot */}
       <div className="flex flex-col items-center shrink-0">
         <div
-          className={`w-4 h-4 rounded-full border-2 transition-all duration-700 delay-200 ${
-            visible ? "scale-100 opacity-100" : "scale-0 opacity-0"
-          } ${
-            milestone.type === "current"
-              ? "bg-teal border-teal shadow-[0_0_12px_rgba(45,212,191,0.5)]"
-              : "bg-navy-light border-teal/40"
+          className={`w-4 h-4 rounded-full border-2 transition-all duration-700 delay-200 ${visible ? "scale-100 opacity-100" : "scale-0 opacity-0"} ${
+            milestone.type === "current" ? "bg-teal border-teal shadow-[0_0_12px_rgba(45,212,191,0.5)]" : "bg-navy-light border-teal/40"
           }`}
         />
-        {index < milestones.length - 1 && (
-          <div
-            className={`w-px flex-1 transition-all duration-1000 delay-500 ${
-              visible
-                ? "bg-gradient-to-b from-teal/40 to-teal/10 opacity-100"
-                : "opacity-0"
-            }`}
-          />
-        )}
+        {index < milestones.length - 1 && <div className={`w-px flex-1 transition-all duration-1000 delay-500 ${visible ? "bg-gradient-to-b from-teal/40 to-teal/10 opacity-100" : "opacity-0"}`} />}
       </div>
 
       {/* Card */}
-      <div
-        className={`pb-10 flex-1 transition-all duration-700 ${
-          visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6"
-        }`}
-        style={{ transitionDelay: `${index * 100 + 100}ms` }}
-      >
+      <div className={`pb-10 flex-1 transition-all duration-700 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6"}`} style={{ transitionDelay: `${index * 100 + 100}ms` }}>
         {/* Duration */}
-        <span
-          className={`inline-block text-xs font-mono tracking-wider mb-2 ${
-            milestone.type === "current" ? "text-teal" : "text-text-dim"
-          }`}
-        >
-          {milestone.duration}
-        </span>
+        <span className={`inline-block text-xs font-mono tracking-wider mb-2 ${milestone.type === "current" ? "text-teal" : "text-text-dim"}`}>{milestone.duration}</span>
 
         <div
           className={`rounded-2xl border p-6 transition-all duration-300 ${
             milestone.type === "current"
               ? "border-teal/20 bg-gradient-to-br from-teal/[0.06] to-transparent shadow-[0_0_40px_rgba(45,212,191,0.06)]"
-              : "border-white/[0.06] bg-white/[0.02] hover:border-white/[0.12] hover:bg-white/[0.04]"
+              : "border-[var(--theme-border)] bg-[var(--theme-white-alpha-5)] hover:border-[var(--theme-white-alpha-10)] hover:bg-[var(--theme-white-alpha-5)]"
           }`}
         >
           <div className="flex items-start gap-4 mb-3">
-            {/* Company logo badge */}
+            {/* Company logo */}
             <div
-              className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 font-bold text-xs tracking-tight ${
-                milestone.type === "current"
-                  ? "bg-teal/15 text-teal border border-teal/20"
-                  : "bg-white/5 text-text-dim border border-white/10"
+              className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 overflow-hidden ${
+                milestone.type === "current" ? "bg-teal/15 border border-teal/20" : "bg-[var(--theme-white-alpha-5)] border border-[var(--theme-white-alpha-10)]"
               }`}
             >
-              {milestone.companyShort}
+              {milestone.logo ? (
+                <Image src={`${basePath}${milestone.logo}`} alt={milestone.company} width={28} height={28} className="object-contain" />
+              ) : (
+                <span className="font-bold text-xs tracking-tight text-text-dim">{milestone.companyShort}</span>
+              )}
             </div>
 
             <div className="flex-1 min-w-0">
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <h3
-                    className={`text-lg font-semibold ${
-                      milestone.type === "current"
-                        ? "bg-gradient-to-r from-teal to-lime bg-clip-text text-transparent"
-                        : "text-text-primary"
-                    }`}
-                  >
+                  <h3 className={`text-lg font-semibold ${milestone.type === "current" ? "bg-gradient-to-r from-teal to-lime bg-clip-text text-transparent" : "text-text-primary"}`}>
                     {milestone.role}
                   </h3>
                   <p className="text-sm text-text-muted">{milestone.company}</p>
@@ -232,9 +206,7 @@ function TimelineCard({
                 {milestone.type === "current" && (
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-teal/10 border border-teal/20 shrink-0">
                     <div className="h-1.5 w-1.5 rounded-full bg-teal animate-pulse" />
-                    <span className="text-[10px] font-medium text-teal">
-                      Current
-                    </span>
+                    <span className="text-[10px] font-medium text-teal">Current</span>
                   </span>
                 )}
               </div>
@@ -243,10 +215,7 @@ function TimelineCard({
 
           <ul className="space-y-1.5 mb-4">
             {milestone.highlights.map((h) => (
-              <li
-                key={h}
-                className="flex items-start gap-2 text-sm text-text-muted"
-              >
+              <li key={h} className="flex items-start gap-2 text-sm text-text-muted">
                 <span className="text-teal/50 mt-1 shrink-0">&#8250;</span>
                 {h}
               </li>
@@ -254,12 +223,9 @@ function TimelineCard({
           </ul>
 
           {milestone.tech.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 pt-3 border-t border-white/5">
+            <div className="flex flex-wrap gap-1.5 pt-3 border-t border-[var(--theme-border)]">
               {milestone.tech.map((t) => (
-                <span
-                  key={t}
-                  className="px-2 py-0.5 text-[10px] font-mono rounded bg-white/5 text-text-dim"
-                >
+                <span key={t} className="px-2 py-0.5 text-[10px] font-mono rounded bg-[var(--theme-white-alpha-5)] text-text-dim">
                   {t}
                 </span>
               ))}
@@ -275,11 +241,7 @@ export default function CareerTimeline() {
   return (
     <div className="max-w-2xl mx-auto">
       {milestones.map((milestone, index) => (
-        <TimelineCard
-          key={`${milestone.company}-${milestone.role}`}
-          milestone={milestone}
-          index={index}
-        />
+        <TimelineCard key={`${milestone.company}-${milestone.role}`} milestone={milestone} index={index} />
       ))}
     </div>
   );

@@ -6,11 +6,7 @@ interface CardProps {
   hover?: boolean;
 }
 
-export default function Card({
-  children,
-  className = "",
-  hover = true,
-}: CardProps) {
+export default function Card({ children, className = "", hover = true }: CardProps) {
   return (
     <div
       className={`

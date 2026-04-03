@@ -1,28 +1,41 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
+import { useTheme } from "@/components/ThemeProvider";
 
 interface MermaidDiagramProps {
   chart: string;
 }
 
-// Brand palette
-const NAVY = "#0F172A";
-const NAVY_LIGHT = "#1E293B";
-const NAVY_LIGHTER = "#334155";
-const TEAL = "#2DD4BF";
-const TEXT = "#E2E8F0";
-const TEXT_MUTED = "#94A3B8";
+// Brand palettes per theme
+const PALETTES = {
+  dark: {
+    NAVY: "#0F172A",
+    NAVY_LIGHT: "#1E293B",
+    NAVY_LIGHTER: "#334155",
+    TEAL: "#2DD4BF",
+    TEXT: "#E2E8F0",
+    TEXT_MUTED: "#94A3B8",
+    SURFACE: "#0B1120",
+  },
+  light: {
+    NAVY: "#FFFFFF",
+    NAVY_LIGHT: "#F1F5F9",
+    NAVY_LIGHTER: "#CBD5E1",
+    TEAL: "#0D9488",
+    TEXT: "#0F172A",
+    TEXT_MUTED: "#475569",
+    SURFACE: "#F8FAFC",
+  },
+};
 
 /**
  * Replace ALL color values in the rendered SVG with brand colors.
  * This handles fill="...", stroke="...", and inline style="..." colors.
  * Preserves "none", "transparent", and "url(...)" values.
  */
-function recolorSvg(svgStr: string): string {
-  // Match any hex color (#xxx, #xxxxxx, #xxxxxxxx), rgb(), rgba(), or named colors
-  const colorPattern = /#(?:[0-9a-fA-F]{3,8})\b|rgb\([^)]+\)|rgba\([^)]+\)|(?:white|black|red|pink|salmon|coral|orange|yellow|gold|lightblue|lightyellow|lightgreen|lightcyan|lavender|linen|wheat|beige|ivory|mintcream|honeydew|aliceblue|ghostwhite|seashell|oldlace|floralwhite|snow|mistyrose|antiquewhite|papayawhip|blanchedalmond|bisque|peachpuff|moccasin|navajowhite|cornsilk|lemonchiffon|khaki|palegoldenrod)(?=[\s;'"])/gi;
-
+function recolorSvg(svgStr: string, palette: typeof PALETTES.dark = PALETTES.dark): string {
+  const { NAVY, NAVY_LIGHT, TEAL, TEXT } = palette;
   // Classify what "role" a color plays based on context
   function replaceColor(fullMatch: string, context: string): string {
     const lower = fullMatch.toLowerCase();
@@ -127,7 +140,44 @@ function isLightColor(color: string): boolean {
     return (r * 299 + g * 587 + b * 114) / 1000 > 128;
   }
   // Named light colors
-  const lightNames = ["white", "snow", "ivory", "lightyellow", "lightgreen", "lightblue", "lightcyan", "lavender", "linen", "wheat", "beige", "mintcream", "honeydew", "aliceblue", "ghostwhite", "seashell", "oldlace", "floralwhite", "papayawhip", "blanchedalmond", "bisque", "peachpuff", "moccasin", "navajowhite", "cornsilk", "lemonchiffon", "khaki", "palegoldenrod", "pink", "salmon", "coral", "gold", "yellow", "orange", "mistyrose", "antiquewhite"];
+  const lightNames = [
+    "white",
+    "snow",
+    "ivory",
+    "lightyellow",
+    "lightgreen",
+    "lightblue",
+    "lightcyan",
+    "lavender",
+    "linen",
+    "wheat",
+    "beige",
+    "mintcream",
+    "honeydew",
+    "aliceblue",
+    "ghostwhite",
+    "seashell",
+    "oldlace",
+    "floralwhite",
+    "papayawhip",
+    "blanchedalmond",
+    "bisque",
+    "peachpuff",
+    "moccasin",
+    "navajowhite",
+    "cornsilk",
+    "lemonchiffon",
+    "khaki",
+    "palegoldenrod",
+    "pink",
+    "salmon",
+    "coral",
+    "gold",
+    "yellow",
+    "orange",
+    "mistyrose",
+    "antiquewhite",
+  ];
   return lightNames.includes(color.toLowerCase());
 }
 
@@ -140,6 +190,8 @@ export default function MermaidDiagram({ chart }: MermaidDiagramProps) {
   const [translate, setTranslate] = useState({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
   const dragStart = useRef({ x: 0, y: 0, tx: 0, ty: 0 });
+  const { theme } = useTheme();
+  const palette = PALETTES[theme];
 
   useEffect(() => {
     let cancelled = false;
@@ -147,111 +199,97 @@ export default function MermaidDiagram({ chart }: MermaidDiagramProps) {
     async function render() {
       try {
         const mermaid = (await import("mermaid")).default;
+        const p = palette;
         mermaid.initialize({
           startOnLoad: false,
           suppressErrorRendering: true,
           theme: "base",
           themeVariables: {
-            // Background & surface
-            darkMode: true,
-            background: "#0F172A",
-            mainBkg: "#1E293B",
-            secondBkg: "#1E293B",
-            tertiaryColor: "#1E293B",
+            darkMode: theme === "dark",
+            background: p.NAVY,
+            mainBkg: p.NAVY_LIGHT,
+            secondBkg: p.NAVY_LIGHT,
+            tertiaryColor: p.NAVY_LIGHT,
 
-            // Primary (nodes, borders)
-            primaryColor: "#1E293B",
-            primaryBorderColor: "#2DD4BF",
-            primaryTextColor: "#E2E8F0",
+            primaryColor: p.NAVY_LIGHT,
+            primaryBorderColor: p.TEAL,
+            primaryTextColor: p.TEXT,
 
-            // Secondary
-            secondaryColor: "#1E293B",
-            secondaryBorderColor: "#334155",
-            secondaryTextColor: "#E2E8F0",
+            secondaryColor: p.NAVY_LIGHT,
+            secondaryBorderColor: p.NAVY_LIGHTER,
+            secondaryTextColor: p.TEXT,
 
-            // Tertiary
-            tertiaryBorderColor: "#334155",
-            tertiaryTextColor: "#E2E8F0",
+            tertiaryBorderColor: p.NAVY_LIGHTER,
+            tertiaryTextColor: p.TEXT,
 
-            // Lines & arrows
-            lineColor: "#2DD4BF",
-            arrowheadColor: "#2DD4BF",
+            lineColor: p.TEAL,
+            arrowheadColor: p.TEAL,
 
-            // Text
-            textColor: "#E2E8F0",
-            labelTextColor: "#E2E8F0",
-            nodeTextColor: "#E2E8F0",
+            textColor: p.TEXT,
+            labelTextColor: p.TEXT,
+            nodeTextColor: p.TEXT,
 
-            // Fonts
             fontFamily: '"SF Mono", "Cascadia Code", "Fira Code", monospace',
             fontSize: "14px",
 
-            // Notes
-            noteBkgColor: "#1E293B",
-            noteTextColor: "#E2E8F0",
-            noteBorderColor: "#2DD4BF",
+            noteBkgColor: p.NAVY_LIGHT,
+            noteTextColor: p.TEXT,
+            noteBorderColor: p.TEAL,
 
-            // Flowchart specific
-            nodeBorder: "#2DD4BF",
-            clusterBkg: "#0F172A",
-            clusterBorder: "#334155",
-            defaultLinkColor: "#2DD4BF",
-            edgeLabelBackground: "#0F172A",
+            nodeBorder: p.TEAL,
+            clusterBkg: p.NAVY,
+            clusterBorder: p.NAVY_LIGHTER,
+            defaultLinkColor: p.TEAL,
+            edgeLabelBackground: p.NAVY,
 
-            // Sequence diagram
-            actorBkg: "#1E293B",
-            actorBorder: "#2DD4BF",
-            actorTextColor: "#E2E8F0",
-            actorLineColor: "#334155",
-            signalColor: "#E2E8F0",
-            signalTextColor: "#E2E8F0",
-            activationBkgColor: "#1E293B",
-            activationBorderColor: "#2DD4BF",
-            sequenceNumberColor: "#0F172A",
+            actorBkg: p.NAVY_LIGHT,
+            actorBorder: p.TEAL,
+            actorTextColor: p.TEXT,
+            actorLineColor: p.NAVY_LIGHTER,
+            signalColor: p.TEXT,
+            signalTextColor: p.TEXT,
+            activationBkgColor: p.NAVY_LIGHT,
+            activationBorderColor: p.TEAL,
+            sequenceNumberColor: p.NAVY,
 
-            // State diagram
-            labelColor: "#E2E8F0",
-            altBackground: "#1E293B",
+            labelColor: p.TEXT,
+            altBackground: p.NAVY_LIGHT,
 
-            // Pie chart
             pie1: "#2DD4BF",
             pie2: "#A3E635",
             pie3: "#14B8A6",
             pie4: "#84CC16",
             pie5: "#0D9488",
             pie6: "#65A30D",
-            pieStrokeColor: "#0F172A",
+            pieStrokeColor: p.NAVY,
             pieTitleTextSize: "16px",
-            pieTitleTextColor: "#E2E8F0",
-            pieSectionTextColor: "#0F172A",
+            pieTitleTextColor: p.TEXT,
+            pieSectionTextColor: p.NAVY,
 
-            // Class diagram
-            classText: "#E2E8F0",
+            classText: p.TEXT,
 
-            // Gantt
-            taskBkgColor: "#1E293B",
-            taskBorderColor: "#2DD4BF",
-            taskTextColor: "#E2E8F0",
-            taskTextLightColor: "#E2E8F0",
-            activeTaskBkgColor: "#2DD4BF",
+            taskBkgColor: p.NAVY_LIGHT,
+            taskBorderColor: p.TEAL,
+            taskTextColor: p.TEXT,
+            taskTextLightColor: p.TEXT,
+            activeTaskBkgColor: p.TEAL,
             activeTaskBorderColor: "#14B8A6",
-            gridColor: "#334155",
-            doneTaskBkgColor: "#334155",
+            gridColor: p.NAVY_LIGHTER,
+            doneTaskBkgColor: p.NAVY_LIGHTER,
             doneTaskBorderColor: "#64748B",
             critBkgColor: "#991B1B",
             critBorderColor: "#EF4444",
             todayLineColor: "#A3E635",
 
-            // Git graph
             git0: "#2DD4BF",
             git1: "#A3E635",
             git2: "#14B8A6",
             git3: "#84CC16",
-            gitBranchLabel0: "#0F172A",
-            gitBranchLabel1: "#0F172A",
-            gitBranchLabel2: "#0F172A",
-            gitBranchLabel3: "#0F172A",
-            gitInv0: "#0F172A",
+            gitBranchLabel0: p.NAVY,
+            gitBranchLabel1: p.NAVY,
+            gitBranchLabel2: p.NAVY,
+            gitBranchLabel3: p.NAVY,
+            gitInv0: p.NAVY,
           },
           flowchart: {
             htmlLabels: true,
@@ -265,7 +303,7 @@ export default function MermaidDiagram({ chart }: MermaidDiagramProps) {
 
         // Recolor the SVG: replace all color values in fill/stroke attributes
         // and inline styles with our brand palette, preserving structure.
-        if (!cancelled) setSvg(recolorSvg(renderedSvg));
+        if (!cancelled) setSvg(recolorSvg(renderedSvg, palette));
       } catch {
         if (!cancelled) setError(true);
       }
@@ -275,7 +313,7 @@ export default function MermaidDiagram({ chart }: MermaidDiagramProps) {
     return () => {
       cancelled = true;
     };
-  }, [chart]);
+  }, [chart, theme, palette]);
 
   // Reset zoom/pan when toggling fullscreen
   const toggleFullscreen = useCallback(() => {
@@ -283,6 +321,30 @@ export default function MermaidDiagram({ chart }: MermaidDiagramProps) {
     setScale(1);
     setTranslate({ x: 0, y: 0 });
   }, []);
+
+  // Auto-fit diagram to viewport when entering fullscreen
+  const fullscreenRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!isFullscreen || !svg) return;
+    // Wait for DOM to render
+    const timer = setTimeout(() => {
+      const container = fullscreenRef.current;
+      if (!container) return;
+      const svgEl = container.querySelector("svg");
+      if (!svgEl) return;
+      const rect = svgEl.getBoundingClientRect();
+      const svgWidth = rect.width || parseFloat(svgEl.getAttribute("width") || "0");
+      const svgHeight = rect.height || parseFloat(svgEl.getAttribute("height") || "0");
+      if (!svgWidth || !svgHeight) return;
+      const scaleX = (window.innerWidth - 120) / svgWidth;
+      const scaleY = (window.innerHeight - 160) / svgHeight;
+      const fitScale = Math.min(scaleX, scaleY, 5);
+      if (fitScale > 1.05) {
+        setScale(fitScale);
+      }
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [isFullscreen, svg]);
 
   // Close on Escape
   useEffect(() => {
@@ -338,11 +400,9 @@ export default function MermaidDiagram({ chart }: MermaidDiagramProps) {
   // On error, fallback to plain code block
   if (error) {
     return (
-      <div className="group relative my-4 rounded-lg border border-white/5 bg-[#0B1120] overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-2 border-b border-white/5 bg-white/[0.02]">
-          <span className="text-[10px] font-mono uppercase tracking-wider text-text-dim">
-            mermaid
-          </span>
+      <div className="group relative my-4 rounded-lg border border-[var(--theme-border)] bg-surface overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-2 border-b border-[var(--theme-border)] bg-[var(--theme-white-alpha-5)]">
+          <span className="text-[10px] font-mono uppercase tracking-wider text-text-dim">mermaid</span>
         </div>
         <pre className="p-4 overflow-x-auto text-sm leading-relaxed">
           <code className="text-text-muted">{chart}</code>
@@ -353,7 +413,7 @@ export default function MermaidDiagram({ chart }: MermaidDiagramProps) {
 
   if (!svg) {
     return (
-      <div className="rounded-lg border border-white/5 bg-[#0B1120] p-8 flex items-center justify-center">
+      <div className="rounded-lg border border-[var(--theme-border)] bg-surface p-8 flex items-center justify-center">
         <div className="h-5 w-5 border-2 border-teal/30 border-t-teal rounded-full animate-spin" />
       </div>
     );
@@ -380,13 +440,14 @@ export default function MermaidDiagram({ chart }: MermaidDiagramProps) {
     return (
       <>
         {/* Inline placeholder */}
-        <div className="my-6 rounded-lg border border-teal/20 bg-[#0B1120] p-8 flex items-center justify-center">
+        <div className="my-6 rounded-lg border border-teal/20 bg-surface p-8 flex items-center justify-center">
           <span className="text-xs text-text-dim">Diagram open in fullscreen</span>
         </div>
 
         {/* Fullscreen overlay */}
         <div
-          className="fixed inset-0 z-[100] bg-[#0B1120]/95 backdrop-blur-sm flex items-center justify-center"
+          ref={fullscreenRef}
+          className="fixed inset-0 z-[100] bg-surface/95 backdrop-blur-sm flex items-center justify-center"
           onWheel={handleWheel}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
@@ -395,22 +456,12 @@ export default function MermaidDiagram({ chart }: MermaidDiagramProps) {
         >
           {/* Controls */}
           <div className="fixed top-4 right-4 z-[101] flex items-center gap-2">
-            <div className="flex items-center gap-1 bg-navy/80 border border-white/10 rounded-lg px-2 py-1">
-              <button
-                onClick={() => setScale((s) => Math.max(s * 0.8, 0.2))}
-                className="text-text-dim hover:text-text-primary px-1.5 py-0.5 text-sm transition-colors"
-                aria-label="Zoom out"
-              >
+            <div className="flex items-center gap-1 bg-navy/80 border border-[var(--theme-white-alpha-10)] rounded-lg px-2 py-1">
+              <button onClick={() => setScale((s) => Math.max(s * 0.8, 0.2))} className="text-text-dim hover:text-text-primary px-1.5 py-0.5 text-sm transition-colors" aria-label="Zoom out">
                 &minus;
               </button>
-              <span className="text-[10px] font-mono text-text-dim min-w-[3rem] text-center">
-                {Math.round(scale * 100)}%
-              </span>
-              <button
-                onClick={() => setScale((s) => Math.min(s * 1.2, 5))}
-                className="text-text-dim hover:text-text-primary px-1.5 py-0.5 text-sm transition-colors"
-                aria-label="Zoom in"
-              >
+              <span className="text-[10px] font-mono text-text-dim min-w-[3rem] text-center">{Math.round(scale * 100)}%</span>
+              <button onClick={() => setScale((s) => Math.min(s * 1.2, 5))} className="text-text-dim hover:text-text-primary px-1.5 py-0.5 text-sm transition-colors" aria-label="Zoom in">
                 +
               </button>
               <button
@@ -418,14 +469,14 @@ export default function MermaidDiagram({ chart }: MermaidDiagramProps) {
                   setScale(1);
                   setTranslate({ x: 0, y: 0 });
                 }}
-                className="text-[10px] font-mono text-text-dim hover:text-teal px-1.5 py-0.5 transition-colors border-l border-white/10 ml-1"
+                className="text-[10px] font-mono text-text-dim hover:text-teal px-1.5 py-0.5 transition-colors border-l border-[var(--theme-white-alpha-10)] ml-1"
               >
                 Reset
               </button>
             </div>
             <button
               onClick={toggleFullscreen}
-              className="bg-navy/80 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-text-dim hover:text-text-primary transition-colors"
+              className="bg-navy/80 border border-[var(--theme-white-alpha-10)] rounded-lg px-3 py-1.5 text-xs text-text-dim hover:text-text-primary transition-colors"
             >
               Close
             </button>
@@ -433,15 +484,11 @@ export default function MermaidDiagram({ chart }: MermaidDiagramProps) {
 
           {/* Hint */}
           <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[101]">
-            <span className="text-[10px] text-text-dim/50 font-mono">
-              Scroll to zoom &middot; Drag to pan &middot; Esc to close
-            </span>
+            <span className="text-[10px] text-text-dim/50 font-mono">Scroll to zoom &middot; Drag to pan &middot; Esc to close</span>
           </div>
 
           {/* Diagram */}
-          <div className="overflow-hidden w-full h-full flex items-center justify-center">
-            {diagramContent}
-          </div>
+          <div className="w-full h-full flex items-center justify-center overflow-auto p-8">{diagramContent}</div>
         </div>
       </>
     );
@@ -449,14 +496,11 @@ export default function MermaidDiagram({ chart }: MermaidDiagramProps) {
 
   // Inline view
   return (
-    <div
-      ref={containerRef}
-      className="group relative my-6 rounded-lg border border-white/5 bg-[#0B1120] p-4 overflow-x-auto"
-    >
+    <div ref={containerRef} className="group relative my-6 rounded-lg border border-[var(--theme-border)] bg-surface p-4 overflow-x-auto">
       {/* Fullscreen button */}
       <button
         onClick={toggleFullscreen}
-        className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity bg-navy/80 border border-white/10 rounded-md px-2 py-1 text-[10px] font-mono text-text-dim hover:text-teal z-10"
+        className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity bg-navy/80 border border-[var(--theme-white-alpha-10)] rounded-md px-2 py-1 text-[10px] font-mono text-text-dim hover:text-teal z-10"
         aria-label="View diagram fullscreen"
       >
         Fullscreen

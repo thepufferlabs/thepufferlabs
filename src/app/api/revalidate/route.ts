@@ -1,5 +1,5 @@
 import { revalidatePath } from "next/cache";
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 
 /**
  * On-demand revalidation endpoint.
@@ -40,9 +40,6 @@ export async function POST(request: NextRequest) {
       paths: ["/docs", "/blogs"],
     });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Revalidation failed" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: err instanceof Error ? err.message : "Revalidation failed" }, { status: 500 });
   }
 }

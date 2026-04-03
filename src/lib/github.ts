@@ -206,9 +206,7 @@ export async function fetchAllRepos(): Promise<GHRepo[]> {
   const perPage = 100;
 
   while (true) {
-    const batch = await ghFetch<GHRepo[]>(
-      `/users/${GITHUB_OWNER}/repos?per_page=${perPage}&page=${page}&sort=updated&direction=desc&type=public`
-    );
+    const batch = await ghFetch<GHRepo[]>(`/users/${GITHUB_OWNER}/repos?per_page=${perPage}&page=${page}&sort=updated&direction=desc&type=public`);
     repos.push(...batch);
     if (batch.length < perPage) break;
     page++;
@@ -221,14 +219,9 @@ export async function fetchAllRepos(): Promise<GHRepo[]> {
  * Fetch the full file tree for a repo.
  * Uses the Git Trees API with `recursive=1` for a single API call.
  */
-export async function fetchRepoTree(
-  repo: string,
-  branch: string
-): Promise<GHTreeItem[]> {
+export async function fetchRepoTree(repo: string, branch: string): Promise<GHTreeItem[]> {
   try {
-    const data = await ghFetch<{ tree: GHTreeItem[] }>(
-      `/repos/${GITHUB_OWNER}/${repo}/git/trees/${branch}?recursive=1`
-    );
+    const data = await ghFetch<{ tree: GHTreeItem[] }>(`/repos/${GITHUB_OWNER}/${repo}/git/trees/${branch}?recursive=1`);
     return data.tree;
   } catch {
     return [];
@@ -240,12 +233,7 @@ export async function fetchRepoTree(
  * Groups them by folder for the tree view.
  */
 export function discoverDocs(tree: GHTreeItem[]): DocFolder[] {
-  const mdFiles = tree.filter(
-    (item) =>
-      item.type === "blob" &&
-      item.path.startsWith("docs/") &&
-      item.path.endsWith(".md")
-  );
+  const mdFiles = tree.filter((item) => item.type === "blob" && item.path.startsWith("docs/") && item.path.endsWith(".md"));
 
   if (mdFiles.length === 0) return [];
 
@@ -283,11 +271,7 @@ export function discoverDocs(tree: GHTreeItem[]): DocFolder[] {
 /**
  * Fetch raw file content from a repo.
  */
-export async function fetchFileContent(
-  repo: string,
-  path: string,
-  branch = "main"
-): Promise<string> {
+export async function fetchFileContent(repo: string, path: string, branch = "main"): Promise<string> {
   const url = `https://raw.githubusercontent.com/${GITHUB_OWNER}/${repo}/${branch}/${path}`;
   const res = await fetch(url, {
     headers: GITHUB_PAT ? { Authorization: `Bearer ${GITHUB_PAT}` } : {},
@@ -305,13 +289,9 @@ export async function fetchFileContent(
  * Fetch language breakdown for a repo (bytes per language).
  * Uses the Languages API: GET /repos/{owner}/{repo}/languages
  */
-export async function fetchLanguageStats(
-  repo: string
-): Promise<Record<string, number>> {
+export async function fetchLanguageStats(repo: string): Promise<Record<string, number>> {
   try {
-    return await ghFetch<Record<string, number>>(
-      `/repos/${GITHUB_OWNER}/${repo}/languages`
-    );
+    return await ghFetch<Record<string, number>>(`/repos/${GITHUB_OWNER}/${repo}/languages`);
   } catch {
     return {};
   }
@@ -344,9 +324,7 @@ export async function discoverAllDocs(): Promise<RepoDocsConfig[]> {
   try {
     repos = await fetchAllRepos();
   } catch (err) {
-    console.warn(
-      `[ThePufferLabs] GitHub API unreachable, using fallback registry: ${err instanceof Error ? err.message : err}`
-    );
+    console.warn(`[The Puffer Labs] GitHub API unreachable, using fallback registry: ${err instanceof Error ? err.message : err}`);
     const { FALLBACK_REGISTRY } = await import("@/lib/fallback-registry");
     return FALLBACK_REGISTRY;
   }
@@ -358,10 +336,7 @@ export async function discoverAllDocs(): Promise<RepoDocsConfig[]> {
     const batch = repos.slice(i, i + batchSize);
     const results = await Promise.all(
       batch.map(async (repo) => {
-        const [tree, languageStats] = await Promise.all([
-          fetchRepoTree(repo.name, repo.default_branch),
-          fetchLanguageStats(repo.name),
-        ]);
+        const [tree, languageStats] = await Promise.all([fetchRepoTree(repo.name, repo.default_branch), fetchLanguageStats(repo.name)]);
         const docs = discoverDocs(tree);
 
         if (docs.length === 0) return null;
@@ -500,15 +475,7 @@ function extractExcerpt(markdown: string, maxLen = 200): string {
       continue;
     }
     // Skip headings, images, code fences, table separators, and table rows
-    if (
-      foundTitle &&
-      trimmed &&
-      !trimmed.startsWith("#") &&
-      !trimmed.startsWith("![") &&
-      !trimmed.startsWith("```") &&
-      !trimmed.startsWith("|") &&
-      !/^[-|:\s]+$/.test(trimmed)
-    ) {
+    if (foundTitle && trimmed && !trimmed.startsWith("#") && !trimmed.startsWith("![") && !trimmed.startsWith("```") && !trimmed.startsWith("|") && !/^[-|:\s]+$/.test(trimmed)) {
       paragraphs.push(trimmed);
       if (paragraphs.join(" ").length >= maxLen) break;
     }
@@ -518,18 +485,18 @@ function extractExcerpt(markdown: string, maxLen = 200): string {
 
   // Strip markdown formatting
   text = text
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")  // [link](url) → link
-    .replace(/!\[([^\]]*)\]\([^)]+\)/g, "")     // ![alt](url) → remove
-    .replace(/\*\*(.+?)\*\*/g, "$1")             // **bold** → bold
-    .replace(/\*(.+?)\*/g, "$1")                  // *italic* → italic
-    .replace(/__(.+?)__/g, "$1")                   // __bold__ → bold
-    .replace(/_(.+?)_/g, "$1")                      // _italic_ → italic
-    .replace(/~~(.+?)~~/g, "$1")                    // ~~strike~~ → strike
-    .replace(/`([^`]+)`/g, "$1")                    // `code` → code
-    .replace(/^>\s?/gm, "")                         // > blockquote → text
-    .replace(/^[-*+]\s/gm, "")                      // - list item → text
-    .replace(/^\d+\.\s/gm, "")                      // 1. list item → text
-    .replace(/\s{2,}/g, " ")                         // collapse whitespace
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // [link](url) → link
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, "") // ![alt](url) → remove
+    .replace(/\*\*(.+?)\*\*/g, "$1") // **bold** → bold
+    .replace(/\*(.+?)\*/g, "$1") // *italic* → italic
+    .replace(/__(.+?)__/g, "$1") // __bold__ → bold
+    .replace(/_(.+?)_/g, "$1") // _italic_ → italic
+    .replace(/~~(.+?)~~/g, "$1") // ~~strike~~ → strike
+    .replace(/`([^`]+)`/g, "$1") // `code` → code
+    .replace(/^>\s?/gm, "") // > blockquote → text
+    .replace(/^[-*+]\s/gm, "") // - list item → text
+    .replace(/^\d+\.\s/gm, "") // 1. list item → text
+    .replace(/\s{2,}/g, " ") // collapse whitespace
     .trim();
 
   return text.length > maxLen ? text.slice(0, maxLen).replace(/\s\S*$/, "") + "..." : text;
@@ -557,9 +524,7 @@ export async function fetchAllBlogs(): Promise<BlogEntry[]> {
         try {
           // Only include repos that have a docs/ folder
           const tree = await fetchRepoTree(repo.name, repo.default_branch);
-          const hasDocs = tree.some(
-            (item) => item.type === "tree" && item.path === "docs"
-          );
+          const hasDocs = tree.some((item) => item.type === "tree" && item.path === "docs");
           if (!hasDocs) return null;
 
           const readme = await fetchFileContent(repo.name, "README.md", repo.default_branch);
@@ -629,9 +594,7 @@ export function formatNumber(n: number): string {
 /**
  * Convert language bytes to percentage breakdown.
  */
-export function languagePercentages(
-  stats: Record<string, number>
-): { language: string; percentage: number; bytes: number }[] {
+export function languagePercentages(stats: Record<string, number>): { language: string; percentage: number; bytes: number }[] {
   const total = Object.values(stats).reduce((a, b) => a + b, 0);
   if (total === 0) return [];
   return Object.entries(stats)

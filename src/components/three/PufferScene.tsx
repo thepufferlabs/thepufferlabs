@@ -3,7 +3,7 @@
 import { useEffect, useRef, useCallback } from "react";
 import * as THREE from "three";
 
-const PUFFER_COUNT = 9;
+const _PUFFER_COUNT = 9;
 const BUBBLE_COUNT = 50;
 
 interface FloatingPuffer {
@@ -42,20 +42,13 @@ export default function PufferScene() {
     const container = containerRef.current;
     if (!container) return;
 
-    const prefersReducedMotion = window.matchMedia(
-      "(prefers-reduced-motion: reduce)"
-    ).matches;
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     // Scene
     const scene = new THREE.Scene();
     scene.fog = new THREE.FogExp2(0x0f172a, 0.045);
 
-    const camera = new THREE.PerspectiveCamera(
-      50,
-      container.clientWidth / container.clientHeight,
-      0.1,
-      100
-    );
+    const camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 100);
     camera.position.z = 10;
 
     const renderer = new THREE.WebGLRenderer({
@@ -75,15 +68,15 @@ export default function PufferScene() {
 
     // Puffer configurations: [scale, x, y, z]
     const configs: [number, number, number, number][] = [
-      [1.8, 0, 0.3, 0],        // center — largest
-      [0.9, -3.8, 1.8, -1],    // upper left
-      [0.7, 3.5, -1.2, -2],    // lower right back
-      [1.1, -2.2, -1.5, 0.5],  // lower left
-      [0.5, 4.2, 2.2, -1.5],   // upper right back — tiny
-      [0.6, -5, -0.3, -3],     // far left — small
-      [1.0, 2.5, 1.0, 1],      // right front
-      [0.4, -1.5, 3, -2],      // top — tiny
-      [0.55, 3, -2.5, -1],     // bottom right — small
+      [1.8, 0, 0.3, 0], // center — largest
+      [0.9, -3.8, 1.8, -1], // upper left
+      [0.7, 3.5, -1.2, -2], // lower right back
+      [1.1, -2.2, -1.5, 0.5], // lower left
+      [0.5, 4.2, 2.2, -1.5], // upper right back — tiny
+      [0.6, -5, -0.3, -3], // far left — small
+      [1.0, 2.5, 1.0, 1], // right front
+      [0.4, -1.5, 3, -2], // top — tiny
+      [0.55, 3, -2.5, -1], // bottom right — small
     ];
 
     const puffers: FloatingPuffer[] = configs.map(([s, x, y, z]) => {
@@ -155,11 +148,7 @@ export default function PufferScene() {
 
     for (let i = 0; i < 4; i++) {
       const ray = new THREE.Mesh(rayGeo, rayMat.clone());
-      ray.position.set(
-        (Math.random() - 0.5) * 16,
-        2,
-        -5 - Math.random() * 3
-      );
+      ray.position.set((Math.random() - 0.5) * 16, 2, -5 - Math.random() * 3);
       ray.rotation.z = (Math.random() - 0.5) * 0.25;
       scene.add(ray);
     }
@@ -187,16 +176,13 @@ export default function PufferScene() {
           const t = time * p.speed + p.phase;
 
           // Gentle swimming bob
-          p.sprite.position.y =
-            p.baseY + Math.sin(t * p.wobbleSpeed) * p.wobbleAmp;
+          p.sprite.position.y = p.baseY + Math.sin(t * p.wobbleSpeed) * p.wobbleAmp;
 
           // Horizontal drift
-          p.sprite.position.x =
-            p.baseX + Math.sin(t * 0.35 + p.phase) * 0.3;
+          p.sprite.position.x = p.baseX + Math.sin(t * 0.35 + p.phase) * 0.3;
 
           // Subtle depth movement
-          p.sprite.position.z =
-            p.baseZ + Math.sin(t * 0.2 + p.phase * 2) * 0.2;
+          p.sprite.position.z = p.baseZ + Math.sin(t * 0.2 + p.phase * 2) * 0.2;
 
           // Gentle breathing scale
           const breath = 1 + Math.sin(t * 1.5) * 0.04;
@@ -222,9 +208,7 @@ export default function PufferScene() {
           b.mesh.position.z = b.baseZ + Math.cos(b.wobble * 0.7) * 0.1;
 
           const pulse = 1 + Math.sin(b.wobble * 2) * 0.15;
-          b.mesh.scale.setScalar(
-            (0.03 + Math.random() * 0.001) * pulse
-          );
+          b.mesh.scale.setScalar((0.03 + Math.random() * 0.001) * pulse);
 
           if (b.mesh.position.y > 8) {
             b.mesh.position.y = -7 - Math.random() * 3;
@@ -279,11 +263,5 @@ export default function PufferScene() {
     };
   }, [handleMouseMove]);
 
-  return (
-    <div
-      ref={containerRef}
-      className="absolute inset-0 -z-10"
-      aria-hidden="true"
-    />
-  );
+  return <div ref={containerRef} className="absolute inset-0 -z-10" aria-hidden="true" />;
 }
