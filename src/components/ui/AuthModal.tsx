@@ -130,6 +130,7 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
       email,
       password,
       options: {
+        emailRedirectTo: getAuthCallbackUrl("/"),
         data: {
           full_name: fullName,
           ...(avatarDataUrl ? { avatar_url: avatarDataUrl, pending_avatar_upload: true } : {}),
