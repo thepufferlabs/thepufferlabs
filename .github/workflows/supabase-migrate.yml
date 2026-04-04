@@ -4,12 +4,13 @@ on:
   push:
     branches: [main]
     paths:
+      - "scripts/migrations/*.sql"
       - "scripts/supabase-schema.sql"
   workflow_dispatch:
 
 jobs:
   migrate:
-    name: Run Supabase Migration
+    name: Run Supabase Migrations
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -25,14 +26,42 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
-      - name: Run migration via db query
-        run: supabase db query --linked --file scripts/supabase-schema.sql
+      - name: Run incremental migrations
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-
-      - name: Verify migration
         run: |
-          echo "Migration completed successfully."
-          echo "Tables created: profiles, user_identities, subscriptions, audit_log, products, purchases"
-          echo "Functions: handle_new_user, handle_user_login, update_updated_at, has_premium_access"
+          # Ensure schema_migrations table exists
+          supabase db query --linked <<'SQL'
+          CREATE TABLE IF NOT EXISTS public.schema_migrations (
+            version TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            executed_at TIMESTAMPTZ DEFAULT now()
+          );
+          SQL
+
+          # Run each migration file in order, skip already-applied ones
+          for file in scripts/migrations/*.sql; do
+            version=$(basename "$file" | cut -d'_' -f1)
+            name=$(basename "$file" .sql)
+
+            # Check if already applied
+            result=$(supabase db query --linked --output csv \
+              "SELECT version FROM public.schema_migrations WHERE version = '$version'")
+
+            if echo "$result" | grep -q "$version"; then
+              echo "⏭️  Skipping $name (already applied)"
+            else
+              echo "▶️  Applying $name..."
+              supabase db query --linked --file "$file"
+              echo "✅  Applied $name"
+            fi
+          done
+
+      - name: Show migration status
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          echo "=== Applied Migrations ==="
+          supabase db query --linked "SELECT version, name, executed_at FROM public.schema_migrations ORDER BY version"

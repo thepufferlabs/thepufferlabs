@@ -40,6 +40,8 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -48,8 +50,21 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
     setEmail("");
     setPassword("");
     setFullName("");
+    setAvatarFile(null);
+    setAvatarPreview(null);
     setError("");
     setMessage("");
+  }
+
+  function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      setError("Image must be under 2MB");
+      return;
+    }
+    setAvatarFile(file);
+    setAvatarPreview(URL.createObjectURL(file));
   }
 
   function switchMode(m: Mode) {
@@ -86,17 +101,39 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const { error } = await supabase.auth.signUp({
+
+    // 1. Sign up
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: { data: { full_name: fullName } },
     });
-    setLoading(false);
+
     if (error) {
+      setLoading(false);
       setError(error.message);
-    } else {
-      setMessage("Check your email for the confirmation link!");
+      return;
     }
+
+    // 2. Upload avatar if provided
+    if (avatarFile && data.user) {
+      const ext = avatarFile.name.split(".").pop();
+      const filePath = `${data.user.id}/avatar.${ext}`;
+
+      const { error: uploadError } = await supabase.storage.from("avatars").upload(filePath, avatarFile, { upsert: true });
+
+      if (!uploadError) {
+        const {
+          data: { publicUrl },
+        } = supabase.storage.from("avatars").getPublicUrl(filePath);
+
+        // Save avatar URL to user metadata
+        await supabase.auth.updateUser({ data: { avatar_url: publicUrl } });
+      }
+    }
+
+    setLoading(false);
+    setMessage("Check your email for the confirmation link!");
   }
 
   async function handleForgotPassword(e: React.FormEvent) {
@@ -222,6 +259,29 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
         {/* Register Form */}
         {mode === "register" && (
           <form onSubmit={handleRegister} className="flex flex-col gap-4">
+            {/* Avatar picker */}
+            <div className="flex justify-center">
+              <label className="relative cursor-pointer group" aria-label="Upload profile picture">
+                <div
+                  className="flex items-center justify-center w-20 h-20 rounded-full border-2 border-dashed overflow-hidden transition-colors group-hover:border-teal/50"
+                  style={{ borderColor: avatarPreview ? "var(--color-teal)" : "var(--theme-border)", background: "var(--color-navy-light)" }}
+                >
+                  {avatarPreview ? (
+                    <img src={avatarPreview} alt="Avatar preview" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="flex flex-col items-center gap-1 text-text-dim">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+                        <circle cx="12" cy="7" r="4" />
+                      </svg>
+                      <span className="text-[10px]">Add Photo</span>
+                    </div>
+                  )}
+                </div>
+                <input type="file" accept="image/*" onChange={handleAvatarChange} className="hidden" />
+              </label>
+            </div>
+
             <input type="text" placeholder="Full Name" value={fullName} onChange={(e) => setFullName(e.target.value)} required className={inputClass} style={{ borderColor: "var(--theme-border)" }} />
             <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required className={inputClass} style={{ borderColor: "var(--theme-border)" }} />
             <input
