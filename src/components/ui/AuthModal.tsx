@@ -3,6 +3,8 @@
 import { useState } from "react";
 import type { Provider } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+import AvatarCropper from "@/components/ui/AvatarCropper";
+import { showToast } from "@/components/ui/Toast";
 
 type AuthModalProps = {
   open: boolean;
@@ -42,8 +44,8 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
   const [fullName, setFullName] = useState("");
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
-  const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
+  const [rawImageSrc, setRawImageSrc] = useState<string | null>(null);
+  const [showCropper, setShowCropper] = useState(false);
   const [loading, setLoading] = useState(false);
 
   function reset() {
@@ -52,19 +54,32 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
     setFullName("");
     setAvatarFile(null);
     setAvatarPreview(null);
-    setError("");
-    setMessage("");
+    setRawImageSrc(null);
+    setShowCropper(false);
   }
 
   function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) {
-      setError("Image must be under 2MB");
+    if (file.size > 5 * 1024 * 1024) {
+      showToast("Image must be under 5MB", "error");
       return;
     }
+    setRawImageSrc(URL.createObjectURL(file));
+    setShowCropper(true);
+  }
+
+  function handleCropDone(blob: Blob) {
+    const file = new File([blob], "avatar.png", { type: "image/png" });
     setAvatarFile(file);
-    setAvatarPreview(URL.createObjectURL(file));
+    setAvatarPreview(URL.createObjectURL(blob));
+    setShowCropper(false);
+    setRawImageSrc(null);
+  }
+
+  function handleCropCancel() {
+    setShowCropper(false);
+    setRawImageSrc(null);
   }
 
   function switchMode(m: Mode) {
@@ -73,81 +88,80 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
   }
 
   async function handleOAuth(provider: Provider) {
-    setError("");
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
         redirectTo: `${window.location.origin}/premium/`,
       },
     });
-    if (error) setError(error.message);
+    if (error) showToast(error.message, "error");
   }
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
-    setError("");
     setLoading(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
     if (error) {
-      setError(error.message);
+      showToast(error.message, "error");
     } else {
       reset();
       onClose();
+      showToast("Welcome back!", "success");
     }
   }
 
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault();
-    setError("");
     setLoading(true);
 
-    // 1. Sign up
-    const { data, error } = await supabase.auth.signUp({
+    // 1. Convert avatar to base64 if provided (upload happens after email confirmation)
+    let avatarDataUrl: string | undefined;
+    if (avatarFile) {
+      avatarDataUrl = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.readAsDataURL(avatarFile);
+      });
+    }
+
+    // 2. Sign up — store avatar as base64 in user_metadata temporarily
+    const { error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { full_name: fullName } },
+      options: {
+        data: {
+          full_name: fullName,
+          ...(avatarDataUrl ? { avatar_url: avatarDataUrl, pending_avatar_upload: true } : {}),
+        },
+      },
     });
 
     if (error) {
       setLoading(false);
-      setError(error.message);
+      showToast(error.message, "error");
       return;
     }
 
-    // 2. Upload avatar if provided
-    if (avatarFile && data.user) {
-      const ext = avatarFile.name.split(".").pop();
-      const filePath = `${data.user.id}/avatar.${ext}`;
-
-      const { error: uploadError } = await supabase.storage.from("avatars").upload(filePath, avatarFile, { upsert: true });
-
-      if (!uploadError) {
-        const {
-          data: { publicUrl },
-        } = supabase.storage.from("avatars").getPublicUrl(filePath);
-
-        // Save avatar URL to user metadata
-        await supabase.auth.updateUser({ data: { avatar_url: publicUrl } });
-      }
-    }
-
     setLoading(false);
-    setMessage("Check your email for the confirmation link!");
+    reset();
+    onClose();
+    showToast("Account created! Check your email for the confirmation link.", "success");
   }
 
   async function handleForgotPassword(e: React.FormEvent) {
     e.preventDefault();
-    setError("");
     setLoading(true);
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/premium/`,
     });
     setLoading(false);
     if (error) {
-      setError(error.message);
+      showToast(error.message, "error");
     } else {
-      setMessage("Password reset link sent to your email!");
+      reset();
+      onClose();
+      showToast("Password reset link sent to your email!", "success");
     }
   }
 
@@ -156,13 +170,13 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
   const inputClass = "rounded-lg border bg-navy-light px-4 py-3 text-sm text-text-primary placeholder:text-text-dim outline-none focus:border-teal/50 transition-colors";
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto py-8 px-4" onClick={onClose}>
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" />
 
       {/* Modal */}
       <div
-        className="relative w-full max-w-md rounded-2xl border p-8"
+        className="relative w-full max-w-md rounded-2xl border p-8 mx-auto my-auto"
         style={{
           background: "var(--color-navy)",
           borderColor: "var(--theme-border)",
@@ -192,12 +206,8 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
           </p>
         </div>
 
-        {/* Error / Success messages */}
-        {error && <div className="mb-4 rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">{error}</div>}
-        {message && <div className="mb-4 rounded-lg bg-teal/10 border border-teal/20 px-4 py-3 text-sm text-teal">{message}</div>}
-
-        {/* OAuth Providers — shown on login & register */}
-        {mode !== "forgot" && (
+        {/* OAuth Providers — shown on login only */}
+        {mode === "login" && (
           <>
             <div className="flex flex-col gap-3 mb-6">
               {OAUTH_PROVIDERS.map((p) => (
@@ -259,28 +269,40 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
         {/* Register Form */}
         {mode === "register" && (
           <form onSubmit={handleRegister} className="flex flex-col gap-4">
-            {/* Avatar picker */}
-            <div className="flex justify-center">
-              <label className="relative cursor-pointer group" aria-label="Upload profile picture">
-                <div
-                  className="flex items-center justify-center w-20 h-20 rounded-full border-2 border-dashed overflow-hidden transition-colors group-hover:border-teal/50"
-                  style={{ borderColor: avatarPreview ? "var(--color-teal)" : "var(--theme-border)", background: "var(--color-navy-light)" }}
-                >
-                  {avatarPreview ? (
-                    <img src={avatarPreview} alt="Avatar preview" className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="flex flex-col items-center gap-1 text-text-dim">
-                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
-                        <circle cx="12" cy="7" r="4" />
+            {/* Avatar picker / cropper */}
+            {showCropper && rawImageSrc ? (
+              <AvatarCropper imageSrc={rawImageSrc} onCrop={handleCropDone} onCancel={handleCropCancel} />
+            ) : (
+              <div className="flex flex-col items-center gap-2">
+                <label className="relative cursor-pointer group" aria-label="Upload profile picture">
+                  <div
+                    className="flex items-center justify-center w-[240px] h-[240px] rounded-full border-2 border-dashed overflow-hidden transition-colors group-hover:border-teal/50"
+                    style={{ borderColor: avatarPreview ? "var(--color-teal)" : "var(--theme-border)", background: "var(--color-navy-light)" }}
+                  >
+                    {avatarPreview ? (
+                      <img src={avatarPreview} alt="Avatar preview" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="flex flex-col items-center gap-2 text-text-dim">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+                          <circle cx="12" cy="7" r="4" />
+                        </svg>
+                        <span className="text-sm">Add Photo</span>
+                      </div>
+                    )}
+                  </div>
+                  <input type="file" accept="image/*" onChange={handleAvatarChange} className="hidden" />
+                  {avatarPreview && (
+                    <span className="absolute bottom-1 right-1 bg-teal text-btn-text rounded-full w-8 h-8 flex items-center justify-center shadow-lg">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M17 3a2.83 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
                       </svg>
-                      <span className="text-[10px]">Add Photo</span>
-                    </div>
+                    </span>
                   )}
-                </div>
-                <input type="file" accept="image/*" onChange={handleAvatarChange} className="hidden" />
-              </label>
-            </div>
+                </label>
+                {avatarPreview && <p className="text-[11px] text-text-dim">Click to change photo</p>}
+              </div>
+            )}
 
             <input type="text" placeholder="Full Name" value={fullName} onChange={(e) => setFullName(e.target.value)} required className={inputClass} style={{ borderColor: "var(--theme-border)" }} />
             <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required className={inputClass} style={{ borderColor: "var(--theme-border)" }} />

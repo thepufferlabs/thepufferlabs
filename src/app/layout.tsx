@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import ThemeProvider from "@/components/ThemeProvider";
 import AuthProvider from "@/components/AuthProvider";
 import Navbar from "@/components/sections/Navbar";
+import ToastContainer from "@/components/ui/Toast";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -30,6 +31,7 @@ export default function RootLayout({
         <ThemeProvider>
           <AuthProvider>
             <Navbar />
+            <ToastContainer />
             {children}
           </AuthProvider>
         </ThemeProvider>
