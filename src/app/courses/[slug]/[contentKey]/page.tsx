@@ -94,6 +94,8 @@ export default async function ContentPage({ params }: PageProps) {
         <PremiumGate
           title={contentKey.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
           tags={[]}
+          slug={slug}
+          contentKey={contentKey}
         />
       </div>
     );
@@ -114,7 +116,13 @@ export default async function ContentPage({ params }: PageProps) {
           <span>/</span>
           <span className="text-amber-400">{contentKey}</span>
         </div>
-        <PremiumGate title={contentEntry.title} tags={contentEntry.tags} />
+        <PremiumGate
+          title={contentEntry.title}
+          tags={contentEntry.tags}
+          slug={slug}
+          storagePath={contentEntry.sourcePath}
+          contentKey={contentKey}
+        />
       </div>
     );
   }

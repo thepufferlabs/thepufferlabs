@@ -11,6 +11,7 @@ type AuthContextType = {
   session: Session | null;
   loading: boolean;
   role: UserRole | null;
+  hasPurchases: boolean;
   signOut: () => Promise<void>;
 };
 
@@ -19,6 +20,7 @@ const AuthContext = createContext<AuthContextType>({
   session: null,
   loading: true,
   role: null,
+  hasPurchases: false,
   signOut: async () => {},
 });
 
@@ -83,6 +85,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [role, setRole] = useState<UserRole | null>(null);
+  const [hasPurchases, setHasPurchases] = useState(false);
 
   async function fetchRole(userId: string) {
     try {
@@ -93,6 +96,18 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
       setRole(data?.role ?? null);
     } catch {
       setRole(null);
+    }
+  }
+
+  async function fetchPurchases(userId: string) {
+    try {
+      const { count } = await (supabase.from("orders") as any)
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .eq("status", "paid") as { count: number | null };
+      setHasPurchases((count ?? 0) > 0);
+    } catch {
+      setHasPurchases(false);
     }
   }
 
@@ -127,7 +142,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
         } else {
           setSession(localSession);
           setUser(validatedUser);
-          await fetchRole(validatedUser.id);
+          await Promise.all([fetchRole(validatedUser.id), fetchPurchases(validatedUser.id)]);
         }
       }
       setLoading(false);
@@ -144,6 +159,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
       if (session?.user && (event === "SIGNED_IN" || event === "TOKEN_REFRESHED")) {
         syncProfile(session.user);
         fetchRole(session.user.id);
+        fetchPurchases(session.user.id);
 
         // Check for pending redirect (set before OAuth flow or email confirmation)
         if (typeof window !== "undefined" && event === "SIGNED_IN") {
@@ -171,8 +187,9 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setSession(null);
     setRole(null);
+    setHasPurchases(false);
     window.location.href = "/";
   }
 
-  return <AuthContext.Provider value={{ user, session, loading, role, signOut }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, session, loading, role, hasPurchases, signOut }}>{children}</AuthContext.Provider>;
 }

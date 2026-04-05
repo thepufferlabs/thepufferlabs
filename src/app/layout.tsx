@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import ThemeProvider from "@/components/ThemeProvider";
 import AuthProvider from "@/components/AuthProvider";
+import CartProvider from "@/components/CartProvider";
 import Navbar from "@/components/sections/Navbar";
 import ToastContainer from "@/components/ui/Toast";
 import "./globals.css";
@@ -30,9 +31,11 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         <ThemeProvider>
           <AuthProvider>
-            <Navbar />
-            <ToastContainer />
-            {children}
+            <CartProvider>
+              <Navbar />
+              <ToastContainer />
+              {children}
+            </CartProvider>
           </AuthProvider>
         </ThemeProvider>
       </body>

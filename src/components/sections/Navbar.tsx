@@ -8,6 +8,7 @@ import Button from "@/components/ui/Button";
 import ThemeToggle from "@/components/ui/ThemeToggle";
 import AuthModal from "@/components/ui/AuthModal";
 import { useAuth } from "@/components/AuthProvider";
+import { useCart } from "@/components/CartProvider";
 import { SITE, NAV_LINKS } from "@/lib/constants";
 
 function UserAvatar({ user, size = 32 }: { user: { email?: string; user_metadata?: { avatar_url?: string; picture?: string; full_name?: string; name?: string } }; size?: number }) {
@@ -39,7 +40,8 @@ export default function Navbar() {
   const profileRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
   const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
-  const { user, loading, signOut } = useAuth();
+  const { user, loading, signOut, hasPurchases } = useAuth();
+  const { itemCount } = useCart();
 
   // Close profile dropdown on outside click
   useEffect(() => {
@@ -129,17 +131,44 @@ export default function Navbar() {
             })}
             <ThemeToggle className="ml-2" />
 
+            {/* Cart icon */}
+            <Link href={`${basePath}/cart/`} className="relative ml-2 p-2 text-text-muted hover:text-text-primary transition-colors rounded-lg hover:bg-[var(--theme-white-alpha-5)]" aria-label="Cart">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="9" cy="21" r="1" />
+                <circle cx="20" cy="21" r="1" />
+                <path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6" />
+              </svg>
+              {itemCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-teal text-[9px] font-bold text-btn-text">
+                  {itemCount}
+                </span>
+              )}
+            </Link>
+
             {/* User avatar (only when logged in) */}
             {!loading && user && (
               <div className="ml-2">
                 <div className="relative" ref={profileRef}>
                   <button
                     onClick={() => setProfileOpen(!profileOpen)}
-                    className="flex items-center rounded-full transition-all hover:ring-2 hover:ring-teal/30 cursor-pointer"
+                    className={`relative flex items-center justify-center rounded-full transition-all cursor-pointer ${hasPurchases ? "" : "hover:ring-2 hover:ring-teal/30"}`}
                     aria-label="Account menu"
                     aria-expanded={profileOpen}
+                    style={hasPurchases ? { padding: "3px" } : undefined}
                   >
-                    <UserAvatar user={user} size={34} />
+                    {hasPurchases && (
+                      <>
+                        {/* Solid gradient ring */}
+                        <span className="absolute inset-0 rounded-full" style={{ background: "linear-gradient(135deg, #f59e0b, #f97316, #ef4444, #f59e0b)", padding: "2px" }}>
+                          <span className="block w-full h-full rounded-full bg-navy" />
+                        </span>
+                        {/* Animated dotted ring */}
+                        <span className="absolute -inset-[3px] rounded-full border-2 border-dashed border-amber-400/50 animate-[spin_8s_linear_infinite]" />
+                      </>
+                    )}
+                    <span className="relative">
+                      <UserAvatar user={user} size={34} />
+                    </span>
                   </button>
 
                   {/* Dropdown */}
@@ -268,6 +297,20 @@ export default function Navbar() {
                 );
               })}
               <ThemeToggle showLabel />
+
+              {/* Mobile cart link */}
+              <Link
+                href={`${basePath}/cart/`}
+                className="flex items-center gap-3 px-4 py-3 text-sm text-text-muted hover:text-text-primary hover:bg-[var(--theme-white-alpha-5)] rounded-lg transition-colors"
+                onClick={() => setOpen(false)}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="9" cy="21" r="1" />
+                  <circle cx="20" cy="21" r="1" />
+                  <path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6" />
+                </svg>
+                Cart{itemCount > 0 && <span className="ml-auto px-2 py-0.5 rounded-full bg-teal text-[10px] font-bold text-btn-text">{itemCount}</span>}
+              </Link>
 
               {/* Mobile user menu (only when logged in) */}
               {!loading && user && (

@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useAuth } from "@/components/AuthProvider";
+import { supabase } from "@/lib/supabase";
 import type { SidebarSection } from "@/lib/courses/types";
 
 interface CourseSidebarProps {
@@ -14,6 +16,24 @@ export default function CourseSidebar({ slug, sections }: CourseSidebarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
   const pathname = usePathname();
+  const { user } = useAuth();
+  const [isOwned, setIsOwned] = useState(false);
+
+  // Check if user owns this course
+  useEffect(() => {
+    if (!user) { setIsOwned(false); return; }
+    async function check() {
+      // Get product_id from slug
+      const { data: product } = await (supabase.from("products") as any)
+        .select("id").eq("slug", slug).single() as { data: { id: string } | null };
+      if (!product) return;
+      // Check entitlement
+      const { data: ent } = await (supabase.from("user_entitlements") as any)
+        .select("id").eq("user_id", user!.id).eq("product_id", product.id).eq("is_active", true).limit(1) as { data: { id: string }[] | null };
+      setIsOwned(!!(ent && ent.length > 0));
+    }
+    check();
+  }, [user, slug]);
 
   // Extract activeContentKey from URL: /courses/{slug}/{contentKey}/
   const pathParts = pathname.replace(basePath, "").split("/").filter(Boolean);
@@ -57,8 +77,8 @@ export default function CourseSidebar({ slug, sections }: CourseSidebarProps) {
               onClick={() => toggleSection(section.id)}
               className="flex items-center w-full px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-text-dim hover:text-text-muted transition-colors rounded-lg cursor-pointer gap-2 min-w-0"
             >
-              {/* Section number or lock */}
-              {isPremiumSection ? (
+              {/* Section number or lock (locks hidden when owned) */}
+              {isPremiumSection && !isOwned ? (
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-amber-400/70">
                   <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
                   <path d="M7 11V7a5 5 0 0110 0v4" />
@@ -79,6 +99,7 @@ export default function CourseSidebar({ slug, sections }: CourseSidebarProps) {
                 {section.items.map((item) => {
                   const isActive = item.contentKey === activeContentKey;
                   const isPremium = item.accessLevel === "premium";
+                  const showLock = isPremium && !isOwned;
 
                   return (
                     <li key={item.contentKey}>
@@ -88,13 +109,13 @@ export default function CourseSidebar({ slug, sections }: CourseSidebarProps) {
                         className={`flex items-center gap-2 px-3 py-2 text-sm rounded-lg transition-all min-w-0 ${
                           isActive
                             ? "text-teal bg-teal/10 font-medium"
-                            : isPremium
+                            : showLock
                               ? "text-text-dim hover:text-text-muted hover:bg-[var(--theme-white-alpha-5)]"
                               : "text-text-muted hover:text-text-primary hover:bg-[var(--theme-white-alpha-5)]"
                         }`}
                       >
                         <span className="truncate flex-1">{item.title}</span>
-                        {isPremium && (
+                        {showLock && (
                           <svg
                             width="12"
                             height="12"

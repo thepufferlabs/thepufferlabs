@@ -61,6 +61,22 @@ export const FEATURED_ARTICLES = [
   },
 ] as const;
 
+/**
+ * Payment gateway config.
+ * Set `enabled` to the provider you want to use.
+ * When "none", the "Complete Purchase" (coupon/free) flow is used.
+ * When "razorpay" or "stripe", the corresponding gateway button is active.
+ */
+export const PAYMENT_CONFIG = {
+  enabled: "none" as "none" | "razorpay" | "stripe",
+  razorpay: {
+    keyId: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ?? "",
+  },
+  stripe: {
+    publishableKey: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "",
+  },
+} as const;
+
 export const CONSULTING_AREAS = [
   {
     title: "Architecture Thinking",

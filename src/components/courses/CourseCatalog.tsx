@@ -1,10 +1,14 @@
 "use client";
 
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { CourseInfo, FlashSale } from "@/lib/courses/types";
 import type { Json } from "@/lib/database.types";
 import { supabase } from "@/lib/supabase";
+import { useCart, type CartItem } from "@/components/CartProvider";
+import { useAuth } from "@/components/AuthProvider";
+import { showToast } from "@/components/ui/Toast";
 import CountdownTimer from "@/components/ui/CountdownTimer";
 
 interface CourseCatalogProps {
@@ -24,14 +28,14 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 const CATEGORY_COLORS: Record<string, string> = {
-  devops: "bg-orange-500/10 text-orange-400 border-orange-500/20",
-  architecture: "bg-indigo-500/10 text-indigo-400 border-indigo-500/20",
-  backend: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-  frontend: "bg-cyan-500/10 text-cyan-400 border-cyan-500/20",
-  security: "bg-red-500/10 text-red-400 border-red-500/20",
-  data: "bg-violet-500/10 text-violet-400 border-violet-500/20",
-  distributed: "bg-blue-500/10 text-blue-400 border-blue-500/20",
-  testing: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20",
+  devops: "bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20",
+  architecture: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20",
+  backend: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
+  frontend: "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20",
+  security: "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20",
+  data: "bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20",
+  distributed: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",
+  testing: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20",
 };
 
 const LEVEL_COLORS: Record<string, string> = {
@@ -42,9 +46,9 @@ const LEVEL_COLORS: Record<string, string> = {
 };
 
 const STATUS_CONFIG: Record<string, { label: string; class: string }> = {
-  published: { label: "Live", class: "bg-green-500/10 text-green-400 border-green-500/20" },
-  draft: { label: "Coming Soon", class: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20" },
-  beta: { label: "Beta", class: "bg-blue-500/10 text-blue-400 border-blue-500/20" },
+  published: { label: "Live", class: "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/25" },
+  draft: { label: "Coming Soon", class: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/25" },
+  beta: { label: "Beta", class: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/25" },
 };
 
 function formatLevel(level: string): string {
@@ -105,29 +109,49 @@ export default function CourseCatalog({ courses, basePath }: CourseCatalogProps)
   const [selectedIdx, setSelectedIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const { user } = useAuth();
+
   // Fetch live pricing from Supabase (prices/flash sales are sensitive — never serve stale)
-  const [livePricing, setLivePricing] = useState<Record<string, { priceCents: number; currency: string; comparePriceCents: number | null; flashSale: FlashSale | null }>>({});
+  const [livePricing, setLivePricing] = useState<Record<string, { productId: string; priceCents: number; currency: string; comparePriceCents: number | null; flashSale: FlashSale | null; thumbnailPath: string | null }>>({});
+
+  // Track which products the user has purchased (entitlements)
+  const [ownedProducts, setOwnedProducts] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     async function fetchPricing() {
       const { data } = await (supabase.from("products") as any)
-        .select("slug, price_cents, currency, compare_price_cents, metadata")
+        .select("id, slug, price_cents, currency, compare_price_cents, metadata, thumbnail_path")
         .eq("product_type", "course")
-        .eq("status", "published") as { data: { slug: string; price_cents: number; currency: string; compare_price_cents: number | null; metadata: Json }[] | null };
+        .eq("status", "published") as { data: { id: string; slug: string; price_cents: number; currency: string; compare_price_cents: number | null; metadata: Json; thumbnail_path: string | null }[] | null };
       if (!data) return;
       const map: typeof livePricing = {};
       for (const row of data) {
         map[row.slug] = {
+          productId: row.id,
           priceCents: row.price_cents,
           currency: row.currency,
           comparePriceCents: row.compare_price_cents,
           flashSale: parseFlashSaleFromMeta(row.metadata),
+          thumbnailPath: row.thumbnail_path,
         };
       }
       setLivePricing(map);
     }
     fetchPricing();
   }, []);
+
+  // Fetch user entitlements
+  useEffect(() => {
+    if (!user) { setOwnedProducts(new Set()); return; }
+    async function fetchEntitlements() {
+      const { data } = await (supabase.from("user_entitlements") as any)
+        .select("product_id")
+        .eq("user_id", user!.id)
+        .eq("is_active", true) as { data: { product_id: string }[] | null };
+      if (data) setOwnedProducts(new Set(data.map((e) => e.product_id)));
+    }
+    fetchEntitlements();
+  }, [user]);
 
   // Merge live pricing into static course data
   const liveCourses = useMemo(() => {
@@ -390,7 +414,7 @@ export default function CourseCatalog({ courses, basePath }: CourseCatalogProps)
       {filtered.length > 0 ? (
         <div className="grid gap-5 sm:grid-cols-2">
           {filtered.map((course) => (
-            <EnhancedCourseCard key={course.slug} course={course} basePath={basePath} />
+            <EnhancedCourseCard key={course.slug} course={course} basePath={basePath} productId={livePricing[course.slug]?.productId ?? ""} isOwned={ownedProducts.has(livePricing[course.slug]?.productId ?? "")} />
           ))}
         </div>
       ) : (
@@ -409,7 +433,10 @@ export default function CourseCatalog({ courses, basePath }: CourseCatalogProps)
 /*  Minimal Course Card                                                */
 /* ------------------------------------------------------------------ */
 
-function EnhancedCourseCard({ course, basePath }: { course: CourseInfo; basePath: string }) {
+function EnhancedCourseCard({ course, basePath, productId, isOwned }: { course: CourseInfo; basePath: string; productId: string; isOwned: boolean }) {
+  const router = useRouter();
+  const { addItem, isInCart } = useCart();
+
   const freeDoc = course.freeContentCount ?? course.previewDocPaths.length;
   const premiumDoc = course.premiumContentCount ?? course.premiumDocPaths.length;
   const totalDoc = freeDoc + premiumDoc;
@@ -422,54 +449,80 @@ function EnhancedCourseCard({ course, basePath }: { course: CourseInfo; basePath
   const categoryClass = CATEGORY_COLORS[course.category] ?? "bg-[var(--theme-white-alpha-5)] text-text-muted border-[var(--theme-border)]";
   const statusCfg = STATUS_CONFIG[course.status] ?? STATUS_CONFIG["published"];
 
-  // Build feature tags
   const features: string[] = [];
   if (cheatsheetCount > 0) features.push(`${cheatsheetCount} cheatsheets`);
   if (hasInterviewPrep) features.push("Interview prep");
   if (codeCount > 0) features.push(`${codeCount} hands-on labs`);
 
+  const activeSale = course.flashSale && new Date(course.flashSale.startsAt) <= new Date() && new Date(course.flashSale.endsAt) > new Date() ? course.flashSale : null;
+  const inCart = productId ? isInCart(productId) : false;
+
+  function buildCartItem(): CartItem {
+    return {
+      productId,
+      slug: course.slug,
+      title: course.title,
+      priceCents: course.priceCents,
+      salePriceCents: activeSale?.salePriceCents ?? null,
+      saleEndsAt: activeSale?.endsAt ?? null,
+      currency: course.currency,
+      thumbnailUrl: course.thumbnailUrl,
+    };
+  }
+
+  function handleAddToCart(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!productId) return;
+    addItem(buildCartItem());
+    showToast("Added to cart", "success");
+  }
+
+  function handleBuyNow(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!productId) return;
+    addItem(buildCartItem());
+    router.push(`${basePath}/cart/`);
+  }
+
   return (
-    <Link
-      href={`${basePath}/courses/${course.slug}/`}
-      className="group rounded-xl border border-[var(--theme-border)] bg-[var(--theme-white-alpha-5)] hover:border-teal/30 hover:shadow-[0_0_30px_rgba(45,212,191,0.06)] transition-all duration-300 p-5 flex flex-col"
+    <div
+      className={`group relative rounded-xl border bg-navy-light transition-all duration-300 p-5 flex flex-col ${
+        activeSale ? "border-amber-500/25 hover:border-amber-400/40" : "border-[var(--theme-border)] hover:border-teal/30"
+      }`}
+      style={{ boxShadow: "var(--theme-card-shadow)" }}
     >
-      {/* Flash sale badge */}
-      {course.flashSale && new Date(course.flashSale.startsAt) <= new Date() && new Date(course.flashSale.endsAt) > new Date() && (
-        <div className="flex items-center justify-between mb-2 px-3 py-1.5 -mx-1 rounded-lg bg-amber-500/10 border border-amber-500/20">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400">{course.flashSale.label}</span>
-          <CountdownTimer endsAt={course.flashSale.endsAt} className="text-amber-400" />
-        </div>
-      )}
+      {/* Overlay link for card navigation */}
+      <Link href={`${basePath}/courses/${course.slug}/`} className="absolute inset-0 z-0 rounded-xl" aria-label={course.title} />
 
       {/* Header: category + status */}
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-3 relative z-[1]">
         <span className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider border ${categoryClass}`}>{CATEGORY_LABELS[course.category] ?? course.category}</span>
         <span className={`px-2 py-0.5 rounded text-[10px] font-medium border ${statusCfg.class}`}>{statusCfg.label}</span>
       </div>
 
       {/* Title */}
-      <h3 className="text-base font-bold text-text-primary group-hover:text-teal transition-colors mb-1.5 leading-snug">{course.title}</h3>
+      <h3 className="text-base font-bold text-text-primary group-hover:text-teal transition-colors mb-1.5 leading-snug relative z-[1]">{course.title}</h3>
 
       {/* Description */}
-      <p className="text-xs text-text-muted leading-relaxed line-clamp-2 mb-3">{course.shortDescription}</p>
+      <p className="text-xs text-text-muted leading-relaxed line-clamp-2 mb-3 relative z-[1]">{course.shortDescription}</p>
 
       {/* Free / Premium bar */}
-      <div className="mb-3">
+      <div className="mb-3 relative z-[1]">
         <div className="flex h-1 rounded-full overflow-hidden bg-[var(--theme-white-alpha-5)]">
           <div className="bg-green-400/70 rounded-l-full" style={{ width: `${freePercent}%` }} />
           <div className="bg-amber-400/50 rounded-r-full" style={{ width: `${100 - freePercent}%` }} />
         </div>
         <div className="flex items-center justify-between mt-1.5 text-[10px] text-text-dim">
-          <span>
-            {freeDoc} free &middot; {premiumDoc} premium
-          </span>
+          <span>{freeDoc} free &middot; {premiumDoc} premium</span>
           <span>{estimateDuration(totalDoc)}</span>
         </div>
       </div>
 
       {/* Feature tags */}
       {features.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mb-3">
+        <div className="flex flex-wrap gap-1.5 mb-3 relative z-[1]">
           {features.map((f) => (
             <span key={f} className="px-2 py-0.5 rounded text-[9px] font-medium bg-[var(--theme-white-alpha-5)] text-text-dim border border-[var(--theme-border)]">
               {f}
@@ -478,31 +531,94 @@ function EnhancedCourseCard({ course, basePath }: { course: CourseInfo; basePath
         </div>
       )}
 
-      {/* Footer: updated + price */}
-      <div className="flex items-center justify-between mt-auto pt-3 border-t border-[var(--theme-border)]">
-        <span className="text-[10px] text-text-dim">{course.updatedAt ? `Updated ${timeAgo(course.updatedAt)}` : ""}</span>
-        <div className="flex items-center gap-2">
-          {(() => {
-            const activeSale = course.flashSale && new Date(course.flashSale.startsAt) <= new Date() && new Date(course.flashSale.endsAt) > new Date() ? course.flashSale : null;
-            if (activeSale) {
-              return (
-                <>
-                  <span className="text-[11px] text-text-dim line-through">{formatPrice(course.priceCents, course.currency)}</span>
-                  <span className="text-sm font-bold text-amber-400">{formatPrice(activeSale.salePriceCents, course.currency)}</span>
-                </>
-              );
-            }
-            return (
-              <>
-                {course.comparePriceCents != null && course.comparePriceCents > 0 && (
-                  <span className="text-[11px] text-text-dim line-through">{formatPrice(course.comparePriceCents, course.currency)}</span>
-                )}
-                <span className="text-sm font-bold text-teal">{course.priceCents > 0 ? formatPrice(course.priceCents, course.currency) : "Free"}</span>
-              </>
-            );
-          })()}
-        </div>
+      {/* Footer: price + actions */}
+      <div className="mt-auto pt-3 border-t border-[var(--theme-border)] relative z-10">
+        {isOwned ? (
+          /* Enrolled state — no price, no cart buttons */
+          <div className="flex items-center justify-between">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold" style={{ background: "var(--theme-success-bg)", color: "var(--theme-success-text)", border: "1px solid var(--theme-success-border)" }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              Enrolled
+            </span>
+            <span className="text-xs text-text-muted">All content unlocked</span>
+          </div>
+        ) : activeSale ? (
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xl font-bold" style={{ color: "var(--theme-sale-text)" }}>{formatPrice(activeSale.salePriceCents, course.currency)}</span>
+              <span className="text-xs text-text-dim line-through">{formatPrice(course.priceCents, course.currency)}</span>
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold" style={{ background: "var(--theme-sale-bg)", color: "var(--theme-sale-text)", border: "1px solid var(--theme-sale-border)" }}>
+                {Math.round((1 - activeSale.salePriceCents / course.priceCents) * 100)}% OFF
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex flex-col items-end gap-0.5 mr-1">
+                <span className="text-[9px] text-text-dim uppercase tracking-wider">{activeSale.label}</span>
+                <CountdownTimer endsAt={activeSale.endsAt} className="text-text-muted" />
+              </div>
+              {productId && course.priceCents > 0 && (
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={handleAddToCart}
+                    disabled={inCart}
+                    title={inCart ? "In Cart" : "Add to Cart"}
+                    className="p-2 rounded-lg border transition-colors cursor-pointer disabled:cursor-default"
+                    style={inCart ? { borderColor: "var(--theme-success-border)", color: "var(--theme-success-text)", background: "var(--theme-success-bg)" } : { borderColor: "var(--theme-border)", color: "var(--color-text-muted)" }}
+                  >
+                    {inCart ? (
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                    ) : (
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" /><path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6" /></svg>
+                    )}
+                  </button>
+                  <button
+                    onClick={handleBuyNow}
+                    title="Buy Now"
+                    className="p-2 rounded-lg bg-teal text-btn-text hover:bg-teal-dark transition-colors cursor-pointer"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" /><line x1="3" y1="6" x2="21" y2="6" /><path d="M16 10a4 4 0 01-8 0" /></svg>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {course.comparePriceCents != null && course.comparePriceCents > 0 && (
+                <span className="text-xs text-text-dim line-through">{formatPrice(course.comparePriceCents, course.currency)}</span>
+              )}
+              <span className="text-lg font-bold text-teal">{course.priceCents > 0 ? formatPrice(course.priceCents, course.currency) : "Free"}</span>
+            </div>
+            {productId && course.priceCents > 0 && (
+              <div className="flex gap-1.5">
+                <button
+                  onClick={handleAddToCart}
+                  disabled={inCart}
+                  title={inCart ? "In Cart" : "Add to Cart"}
+                  className="p-2 rounded-lg border transition-colors cursor-pointer disabled:cursor-default"
+                  style={inCart ? { borderColor: "var(--theme-success-border)", color: "var(--theme-success-text)", background: "var(--theme-success-bg)" } : { borderColor: "var(--theme-border)", color: "var(--color-text-muted)" }}
+                >
+                  {inCart ? (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                  ) : (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" /><path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6" /></svg>
+                  )}
+                </button>
+                <button
+                  onClick={handleBuyNow}
+                  title="Buy Now"
+                  className="p-2 rounded-lg bg-teal text-btn-text hover:bg-teal-dark transition-colors cursor-pointer"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" /><line x1="3" y1="6" x2="21" y2="6" /><path d="M16 10a4 4 0 01-8 0" /></svg>
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
-    </Link>
+    </div>
   );
 }

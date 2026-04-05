@@ -9,7 +9,8 @@ import { showToast } from "@/components/ui/Toast";
 import type { Database } from "@/lib/database.types";
 
 type Section = "profile" | "purchases" | "premium";
-type Purchase = Database["public"]["Tables"]["purchases"]["Row"];
+type OrderRow = Database["public"]["Tables"]["orders"]["Row"];
+type OrderWithProduct = OrderRow & { product_title?: string };
 type Subscription = Database["public"]["Tables"]["subscriptions"]["Row"];
 
 const SIDEBAR_ITEMS: { id: Section; label: string; icon: React.ReactNode }[] = [
@@ -58,7 +59,8 @@ export default function AccountPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const prevUserId = useRef<string | null>(null);
 
-  const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [orders, setOrders] = useState<OrderWithProduct[]>([]);
+  const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
   const [purchasesLoading, setPurchasesLoading] = useState(false);
 
   const [subscription, setSubscription] = useState<Subscription | null>(null);
@@ -86,8 +88,20 @@ export default function AccountPage() {
   const loadPurchases = useCallback(async () => {
     if (!user) return;
     setPurchasesLoading(true);
-    const { data } = await supabase.from("purchases").select("*").eq("user_id", user.id).order("created_at", { ascending: false });
-    setPurchases((data as Purchase[]) ?? []);
+    const { data } = await (supabase.from("orders") as any).select("*").eq("user_id", user.id).order("created_at", { ascending: false }) as { data: OrderRow[] | null };
+    if (!data) { setOrders([]); setPurchasesLoading(false); return; }
+
+    // Fetch product titles for all orders with product_id
+    const productIds = [...new Set(data.filter((o) => o.product_id).map((o) => o.product_id!))];
+    let productMap: Record<string, string> = {};
+    if (productIds.length > 0) {
+      const { data: products } = await (supabase.from("products") as any)
+        .select("id, title")
+        .in("id", productIds) as { data: { id: string; title: string }[] | null };
+      if (products) productMap = Object.fromEntries(products.map((p) => [p.id, p.title]));
+    }
+
+    setOrders(data.map((o) => ({ ...o, product_title: o.product_id ? productMap[o.product_id] : undefined })));
     setPurchasesLoading(false);
   }, [user]);
 
@@ -298,8 +312,8 @@ export default function AccountPage() {
               <div className="rounded-2xl border p-6" style={{ background: "var(--color-navy-light)", borderColor: "var(--theme-border)" }}>
                 <h2 className="text-lg font-semibold text-text-primary mb-4">Purchase History</h2>
                 {purchasesLoading ? (
-                  <div className="text-text-muted text-sm py-8 text-center">Loading purchases...</div>
-                ) : purchases.length === 0 ? (
+                  <div className="text-text-muted text-sm py-8 text-center">Loading orders...</div>
+                ) : orders.length === 0 ? (
                   <div className="text-center py-12">
                     <svg
                       className="mx-auto mb-3 text-text-dim"
@@ -315,55 +329,121 @@ export default function AccountPage() {
                       <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
                       <line x1="1" y1="10" x2="23" y2="10" />
                     </svg>
-                    <p className="text-sm text-text-muted">No purchases yet</p>
-                    <p className="text-xs text-text-dim mt-1">Your purchase history will appear here</p>
+                    <p className="text-sm text-text-muted">No orders yet</p>
+                    <p className="text-xs text-text-dim mt-1">Your order history will appear here</p>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b" style={{ borderColor: "var(--theme-border)" }}>
-                          <th className="text-left py-3 px-2 text-text-muted font-medium">Date</th>
-                          <th className="text-left py-3 px-2 text-text-muted font-medium">Amount</th>
-                          <th className="text-left py-3 px-2 text-text-muted font-medium">Status</th>
-                          <th className="text-left py-3 px-2 text-text-muted font-medium">Receipt</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {purchases.map((p) => (
-                          <tr key={p.id} className="border-b last:border-0" style={{ borderColor: "var(--theme-border)" }}>
-                            <td className="py-3 px-2 text-text-primary">{new Date(p.created_at).toLocaleDateString()}</td>
-                            <td className="py-3 px-2 text-text-primary">
-                              {(p.amount_cents / 100).toFixed(2)} {p.currency}
-                            </td>
-                            <td className="py-3 px-2">
+                  <div className="space-y-3">
+                    {orders.map((o) => {
+                      const isExpanded = expandedOrder === o.id;
+                      const billing = (o.metadata && typeof o.metadata === "object" && !Array.isArray(o.metadata)) ? (o.metadata as Record<string, unknown>).billing as Record<string, string> | undefined : undefined;
+
+                      return (
+                        <div key={o.id} className="rounded-xl border overflow-hidden" style={{ borderColor: "var(--theme-border)" }}>
+                          {/* Order summary row — clickable */}
+                          <button
+                            onClick={() => setExpandedOrder(isExpanded ? null : o.id)}
+                            className="w-full flex items-center justify-between px-4 py-3 text-left cursor-pointer hover:bg-[var(--theme-white-alpha-5)] transition-colors"
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
                               <span
-                                className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                                  p.status === "paid"
-                                    ? "bg-green-500/10 text-green-400"
-                                    : p.status === "pending"
-                                      ? "bg-yellow-500/10 text-yellow-400"
-                                      : p.status === "refunded"
-                                        ? "bg-blue-500/10 text-blue-400"
-                                        : "bg-red-500/10 text-red-400"
+                                className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                                  o.status === "paid"
+                                    ? "bg-green-500/10 text-green-700 dark:text-green-400"
+                                    : o.status === "pending"
+                                      ? "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400"
+                                      : o.status === "refunded"
+                                        ? "bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                                        : "bg-red-500/10 text-red-600 dark:text-red-400"
                                 }`}
                               >
-                                {p.status}
+                                {o.status}
                               </span>
-                            </td>
-                            <td className="py-3 px-2">
-                              {p.receipt_url ? (
-                                <a href={p.receipt_url} target="_blank" rel="noopener noreferrer" className="text-teal hover:underline text-xs">
-                                  View
-                                </a>
-                              ) : (
-                                <span className="text-text-dim text-xs">-</span>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                              <span className="text-sm font-medium text-text-primary truncate">{o.product_title ?? "Course"}</span>
+                            </div>
+                            <div className="flex items-center gap-3 flex-shrink-0">
+                              <span className="text-xs text-text-muted">{new Date(o.created_at).toLocaleDateString()}</span>
+                              <span className="text-sm font-semibold text-text-primary">
+                                {o.total_cents === 0 ? "Free" : `\u20B9${(o.total_cents / 100).toLocaleString("en-IN")}`}
+                              </span>
+                              <svg
+                                width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                                className={`text-text-dim transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                              >
+                                <polyline points="6 9 12 15 18 9" />
+                              </svg>
+                            </div>
+                          </button>
+
+                          {/* Expanded details */}
+                          {isExpanded && (
+                            <div className="px-4 pb-4 pt-1 border-t border-[var(--theme-border)] bg-[var(--theme-white-alpha-5)]">
+                              <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-xs">
+                                <div>
+                                  <span className="text-text-dim uppercase tracking-wider text-[10px]">Order Number</span>
+                                  <p className="text-text-primary font-mono mt-0.5">{o.order_number}</p>
+                                </div>
+                                <div>
+                                  <span className="text-text-dim uppercase tracking-wider text-[10px]">Date</span>
+                                  <p className="text-text-primary mt-0.5">{new Date(o.created_at).toLocaleString()}</p>
+                                </div>
+                                <div>
+                                  <span className="text-text-dim uppercase tracking-wider text-[10px]">Subtotal</span>
+                                  <p className="text-text-primary mt-0.5">{o.subtotal_cents === 0 ? "Free" : `\u20B9${(o.subtotal_cents / 100).toLocaleString("en-IN")}`}</p>
+                                </div>
+                                {o.discount_cents > 0 && (
+                                  <div>
+                                    <span className="text-text-dim uppercase tracking-wider text-[10px]">Discount</span>
+                                    <p className="mt-0.5" style={{ color: "var(--theme-success-text)" }}>-\u20B9{(o.discount_cents / 100).toLocaleString("en-IN")}</p>
+                                  </div>
+                                )}
+                                <div>
+                                  <span className="text-text-dim uppercase tracking-wider text-[10px]">Total Paid</span>
+                                  <p className="text-text-primary font-semibold mt-0.5">{o.total_cents === 0 ? "Free" : `\u20B9${(o.total_cents / 100).toLocaleString("en-IN")}`}</p>
+                                </div>
+                                <div>
+                                  <span className="text-text-dim uppercase tracking-wider text-[10px]">Payment</span>
+                                  <p className="text-text-primary mt-0.5 capitalize">{o.provider}</p>
+                                </div>
+                                {billing && (
+                                  <>
+                                    <div className="col-span-2 border-t border-[var(--theme-border)] pt-3 mt-1">
+                                      <span className="text-text-dim uppercase tracking-wider text-[10px]">Billing Details</span>
+                                    </div>
+                                    <div>
+                                      <span className="text-text-dim uppercase tracking-wider text-[10px]">Name</span>
+                                      <p className="text-text-primary mt-0.5">{billing.fullName}</p>
+                                    </div>
+                                    <div>
+                                      <span className="text-text-dim uppercase tracking-wider text-[10px]">Email</span>
+                                      <p className="text-text-primary mt-0.5">{billing.email}</p>
+                                    </div>
+                                    {billing.phone && (
+                                      <div>
+                                        <span className="text-text-dim uppercase tracking-wider text-[10px]">Phone</span>
+                                        <p className="text-text-primary mt-0.5">{billing.phone}</p>
+                                      </div>
+                                    )}
+                                    {billing.street && (
+                                      <div>
+                                        <span className="text-text-dim uppercase tracking-wider text-[10px]">Address</span>
+                                        <p className="text-text-primary mt-0.5">{billing.street}, {billing.city}, {billing.state} {billing.pincode}</p>
+                                      </div>
+                                    )}
+                                    {billing.gstin && (
+                                      <div>
+                                        <span className="text-text-dim uppercase tracking-wider text-[10px]">GSTIN</span>
+                                        <p className="text-text-primary font-mono mt-0.5">{billing.gstin}{billing.businessName ? ` — ${billing.businessName}` : ""}</p>
+                                      </div>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
