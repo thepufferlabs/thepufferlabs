@@ -6,6 +6,6 @@ import type { Database } from "./database.types";
  * RLS policies allow public reads for published products, product_content, and course_details.
  */
 const supabaseUrl = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY!;
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY!;
 
 export const supabaseServer = createClient<Database>(supabaseUrl, supabaseAnonKey);
