@@ -4,11 +4,13 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import type { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { showToast } from "@/components/ui/Toast";
+import type { UserRole } from "@/lib/database.types";
 
 type AuthContextType = {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  role: UserRole | null;
   signOut: () => Promise<void>;
 };
 
@@ -16,6 +18,7 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   session: null,
   loading: true,
+  role: null,
   signOut: async () => {},
 });
 
@@ -79,6 +82,19 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [role, setRole] = useState<UserRole | null>(null);
+
+  async function fetchRole(userId: string) {
+    try {
+      const { data } = await (supabase.from("profiles") as any)
+        .select("role")
+        .eq("id", userId)
+        .single() as { data: { role: UserRole } | null };
+      setRole(data?.role ?? null);
+    } catch {
+      setRole(null);
+    }
+  }
 
   useEffect(() => {
     // Handle auth errors in URL hash (e.g. expired email confirmation links)
@@ -107,9 +123,11 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
           await supabase.auth.signOut({ scope: "local" });
           setSession(null);
           setUser(null);
+          setRole(null);
         } else {
           setSession(localSession);
           setUser(validatedUser);
+          await fetchRole(validatedUser.id);
         }
       }
       setLoading(false);
@@ -125,6 +143,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
       // Sync profile demographics on sign-in / token refresh
       if (session?.user && (event === "SIGNED_IN" || event === "TOKEN_REFRESHED")) {
         syncProfile(session.user);
+        fetchRole(session.user.id);
 
         // Check for pending redirect (set before OAuth flow or email confirmation)
         if (typeof window !== "undefined" && event === "SIGNED_IN") {
@@ -151,8 +170,9 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
     }
     setUser(null);
     setSession(null);
+    setRole(null);
     window.location.href = "/";
   }
 
-  return <AuthContext.Provider value={{ user, session, loading, signOut }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, session, loading, role, signOut }}>{children}</AuthContext.Provider>;
 }

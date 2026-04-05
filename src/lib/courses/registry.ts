@@ -1,5 +1,6 @@
 import { supabaseServer } from "@/lib/supabase-server";
-import type { Database } from "@/lib/database.types";
+import type { Database, Json } from "@/lib/database.types";
+import type { FlashSale } from "./types";
 
 type ProductRow = Database["public"]["Tables"]["products"]["Row"];
 
@@ -23,6 +24,23 @@ export interface CourseProduct {
   priceCents: number;
   currency: string;
   comparePriceCents: number | null;
+  flashSale: FlashSale | null;
+}
+
+function parseFlashSale(metadata: Json): FlashSale | null {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
+  const fs = (metadata as Record<string, Json>).flash_sale;
+  if (!fs || typeof fs !== "object" || Array.isArray(fs)) return null;
+  const sale = fs as Record<string, Json>;
+  if (!sale.is_active) return null;
+  if (new Date(sale.ends_at as string) <= new Date()) return null;
+  return {
+    salePriceCents: sale.sale_price_cents as number,
+    startsAt: sale.starts_at as string,
+    endsAt: sale.ends_at as string,
+    label: (sale.label as string) ?? "",
+    isActive: true,
+  };
 }
 
 function mapProductRow(row: ProductRow): CourseProduct {
@@ -46,6 +64,7 @@ function mapProductRow(row: ProductRow): CourseProduct {
     priceCents: row.price_cents,
     currency: row.currency,
     comparePriceCents: row.compare_price_cents,
+    flashSale: parseFlashSale(row.metadata),
   };
 }
 

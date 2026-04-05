@@ -43,6 +43,7 @@ export function buildCourseInfo(product: CourseProduct): CourseInfo {
     priceCents: product.priceCents,
     currency: product.currency,
     comparePriceCents: product.comparePriceCents,
+    flashSale: product.flashSale,
   };
 }
 

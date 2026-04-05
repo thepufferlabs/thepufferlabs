@@ -19,6 +19,14 @@ export interface CourseMeta {
   premiumCodePaths: string[];
 }
 
+export interface FlashSale {
+  salePriceCents: number;
+  startsAt: string;
+  endsAt: string;
+  label: string;
+  isActive: boolean;
+}
+
 /** Enriched course data combining product + course details from Supabase */
 export interface CourseInfo extends CourseMeta {
   updatedAt: string;
@@ -29,6 +37,7 @@ export interface CourseInfo extends CourseMeta {
   priceCents: number;
   currency: string;
   comparePriceCents: number | null;
+  flashSale: FlashSale | null;
 }
 
 export interface ContentEntry {

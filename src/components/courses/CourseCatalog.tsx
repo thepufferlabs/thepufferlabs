@@ -3,6 +3,7 @@
 import { useState, useMemo, useRef, useCallback } from "react";
 import Link from "next/link";
 import type { CourseInfo } from "@/lib/courses/types";
+import CountdownTimer from "@/components/ui/CountdownTimer";
 
 interface CourseCatalogProps {
   courses: CourseInfo[];
@@ -380,6 +381,14 @@ function EnhancedCourseCard({ course, basePath }: { course: CourseInfo; basePath
       href={`${basePath}/courses/${course.slug}/`}
       className="group rounded-xl border border-[var(--theme-border)] bg-[var(--theme-white-alpha-5)] hover:border-teal/30 hover:shadow-[0_0_30px_rgba(45,212,191,0.06)] transition-all duration-300 p-5 flex flex-col"
     >
+      {/* Flash sale badge */}
+      {course.flashSale && new Date(course.flashSale.startsAt) <= new Date() && new Date(course.flashSale.endsAt) > new Date() && (
+        <div className="flex items-center justify-between mb-2 px-3 py-1.5 -mx-1 rounded-lg bg-amber-500/10 border border-amber-500/20">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400">{course.flashSale.label}</span>
+          <CountdownTimer endsAt={course.flashSale.endsAt} className="text-amber-400" />
+        </div>
+      )}
+
       {/* Header: category + status */}
       <div className="flex items-center justify-between mb-3">
         <span className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider border ${categoryClass}`}>{CATEGORY_LABELS[course.category] ?? course.category}</span>
@@ -421,14 +430,25 @@ function EnhancedCourseCard({ course, basePath }: { course: CourseInfo; basePath
       <div className="flex items-center justify-between mt-auto pt-3 border-t border-[var(--theme-border)]">
         <span className="text-[10px] text-text-dim">{course.updatedAt ? `Updated ${timeAgo(course.updatedAt)}` : ""}</span>
         <div className="flex items-center gap-2">
-          {course.comparePriceCents != null && course.comparePriceCents > 0 && (
-            <span className="text-[11px] text-text-dim line-through">
-              {formatPrice(course.comparePriceCents, course.currency)}
-            </span>
-          )}
-          <span className="text-sm font-bold text-teal">
-            {course.priceCents > 0 ? formatPrice(course.priceCents, course.currency) : "Free"}
-          </span>
+          {(() => {
+            const activeSale = course.flashSale && new Date(course.flashSale.startsAt) <= new Date() && new Date(course.flashSale.endsAt) > new Date() ? course.flashSale : null;
+            if (activeSale) {
+              return (
+                <>
+                  <span className="text-[11px] text-text-dim line-through">{formatPrice(course.priceCents, course.currency)}</span>
+                  <span className="text-sm font-bold text-amber-400">{formatPrice(activeSale.salePriceCents, course.currency)}</span>
+                </>
+              );
+            }
+            return (
+              <>
+                {course.comparePriceCents != null && course.comparePriceCents > 0 && (
+                  <span className="text-[11px] text-text-dim line-through">{formatPrice(course.comparePriceCents, course.currency)}</span>
+                )}
+                <span className="text-sm font-bold text-teal">{course.priceCents > 0 ? formatPrice(course.priceCents, course.currency) : "Free"}</span>
+              </>
+            );
+          })()}
         </div>
       </div>
     </Link>

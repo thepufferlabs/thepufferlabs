@@ -1,0 +1,42 @@
+name: Promote User to Admin
+
+on:
+  workflow_dispatch:
+    inputs:
+      user_email:
+        description: "Email of the user to promote to admin"
+        required: true
+        type: string
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Promote user to admin role
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          EMAIL: ${{ inputs.user_email }}
+        run: |
+          echo "Promoting ${EMAIL} to admin..."
+
+          response=$(curl -s -w "\n%{http_code}" \
+            "${SUPABASE_URL}/rest/v1/profiles?email=eq.${EMAIL}" \
+            -X PATCH \
+            -H "apikey: ${SUPABASE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_KEY}" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: return=representation" \
+            -d '{"role": "admin"}')
+
+          http_code=$(echo "$response" | tail -1)
+          body=$(echo "$response" | sed '$d')
+
+          if [ "$http_code" = "200" ]; then
+            echo "✅ Successfully promoted ${EMAIL} to admin"
+            echo "$body" | jq -r '.[] | "  id: \(.id)\n  email: \(.email)\n  role: \(.role)"' 2>/dev/null || echo "$body"
+          else
+            echo "❌ Failed to promote user. HTTP ${http_code}"
+            echo "$body"
+            exit 1
+          fi

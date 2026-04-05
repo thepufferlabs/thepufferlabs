@@ -19,6 +19,11 @@ export type AuditAction =
 export type ProductType = "course" | "data_service" | "tool" | "bundle";
 export type ProductStatus = "draft" | "published" | "archived";
 export type AccessLevel = "free" | "premium";
+export type CouponType = "percent" | "fixed_amount";
+export type PaymentProvider = "razorpay" | "stripe" | "manual" | "coupon";
+export type PaymentStatus = "pending" | "authorized" | "paid" | "failed" | "refunded" | "disputed" | "canceled";
+export type SubscriptionInterval = "month" | "quarter" | "year" | "lifetime";
+export type EntitlementSource = "purchase" | "subscription" | "coupon" | "manual" | "trial";
 
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
@@ -345,6 +350,169 @@ export interface Database {
           note?: string | null;
         };
       };
+      coupons: {
+        Row: {
+          id: string;
+          code: string;
+          coupon_type: CouponType;
+          discount_value: number;
+          currency: string;
+          max_uses: number | null;
+          used_count: number;
+          max_uses_per_user: number;
+          min_purchase_cents: number;
+          applies_to_product_id: string | null;
+          applies_to_plan_id: string | null;
+          applies_to_bundle_id: string | null;
+          valid_from: string;
+          valid_until: string | null;
+          is_active: boolean;
+          metadata: Json;
+          created_at: string;
+        };
+        Insert: {
+          code: string;
+          coupon_type: CouponType;
+          discount_value: number;
+          currency?: string;
+          max_uses?: number | null;
+          max_uses_per_user?: number;
+          min_purchase_cents?: number;
+          applies_to_product_id?: string | null;
+          applies_to_plan_id?: string | null;
+          applies_to_bundle_id?: string | null;
+          valid_from?: string;
+          valid_until?: string | null;
+          is_active?: boolean;
+          metadata?: Json;
+        };
+        Update: {
+          code?: string;
+          coupon_type?: CouponType;
+          discount_value?: number;
+          currency?: string;
+          max_uses?: number | null;
+          max_uses_per_user?: number;
+          min_purchase_cents?: number;
+          applies_to_product_id?: string | null;
+          applies_to_plan_id?: string | null;
+          applies_to_bundle_id?: string | null;
+          valid_from?: string;
+          valid_until?: string | null;
+          is_active?: boolean;
+          metadata?: Json;
+        };
+      };
+      bundles: {
+        Row: {
+          id: string;
+          slug: string;
+          name: string;
+          description: string | null;
+          price_cents: number;
+          currency: string;
+          compare_price_cents: number | null;
+          is_active: boolean;
+          valid_from: string | null;
+          valid_until: string | null;
+          metadata: Json;
+          created_at: string;
+        };
+        Insert: {
+          slug: string;
+          name: string;
+          description?: string | null;
+          price_cents: number;
+          currency?: string;
+          compare_price_cents?: number | null;
+          is_active?: boolean;
+          valid_from?: string | null;
+          valid_until?: string | null;
+          metadata?: Json;
+        };
+        Update: {
+          slug?: string;
+          name?: string;
+          description?: string | null;
+          price_cents?: number;
+          currency?: string;
+          compare_price_cents?: number | null;
+          is_active?: boolean;
+          valid_from?: string | null;
+          valid_until?: string | null;
+          metadata?: Json;
+        };
+      };
+      bundle_products: {
+        Row: {
+          bundle_id: string;
+          product_id: string;
+        };
+        Insert: {
+          bundle_id: string;
+          product_id: string;
+        };
+        Update: never;
+      };
+      orders: {
+        Row: {
+          id: string;
+          order_number: string;
+          user_id: string;
+          status: PaymentStatus;
+          product_id: string | null;
+          bundle_id: string | null;
+          plan_id: string | null;
+          coupon_id: string | null;
+          subtotal_cents: number;
+          discount_cents: number;
+          tax_cents: number;
+          total_cents: number;
+          currency: string;
+          provider: PaymentProvider;
+          provider_order_id: string | null;
+          provider_payment_id: string | null;
+          provider_signature: string | null;
+          provider_data: Json;
+          receipt_url: string | null;
+          notes: string | null;
+          paid_at: string | null;
+          canceled_at: string | null;
+          cancel_reason: string | null;
+          metadata: Json;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          status?: PaymentStatus;
+          product_id?: string | null;
+          bundle_id?: string | null;
+          plan_id?: string | null;
+          coupon_id?: string | null;
+          subtotal_cents: number;
+          discount_cents?: number;
+          tax_cents?: number;
+          total_cents: number;
+          currency?: string;
+          provider: PaymentProvider;
+          provider_order_id?: string | null;
+          notes?: string | null;
+          metadata?: Json;
+        };
+        Update: {
+          status?: PaymentStatus;
+          provider_payment_id?: string | null;
+          provider_signature?: string | null;
+          provider_data?: Json;
+          receipt_url?: string | null;
+          notes?: string | null;
+          paid_at?: string | null;
+          canceled_at?: string | null;
+          cancel_reason?: string | null;
+          metadata?: Json;
+        };
+      };
       purchases: {
         Row: {
           id: string;
@@ -403,6 +571,11 @@ export interface Database {
       product_type: ProductType;
       product_status: ProductStatus;
       access_level: AccessLevel;
+      coupon_type: CouponType;
+      payment_provider: PaymentProvider;
+      payment_status: PaymentStatus;
+      subscription_interval: SubscriptionInterval;
+      entitlement_source: EntitlementSource;
     };
   };
 }
