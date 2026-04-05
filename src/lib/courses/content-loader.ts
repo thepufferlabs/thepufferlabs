@@ -40,6 +40,9 @@ export function buildCourseInfo(product: CourseProduct): CourseInfo {
     thumbnailUrl: product.thumbnailPath ? buildAssetUrl(product.thumbnailPath) : "",
     freeContentCount: product.freeContentCount,
     premiumContentCount: product.premiumContentCount,
+    priceCents: product.priceCents,
+    currency: product.currency,
+    comparePriceCents: product.comparePriceCents,
   };
 }
 

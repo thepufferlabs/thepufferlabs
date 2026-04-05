@@ -109,13 +109,18 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
   }
 
   async function handleOAuth(provider: Provider) {
+    // Store redirect intent so AuthProvider can redirect after OAuth callback
+    sessionStorage.setItem("auth_redirect", "/courses");
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: getAuthCallbackUrl("/"),
+        redirectTo: getAuthCallbackUrl("/courses"),
       },
     });
-    if (error) showToast(error.message, "error");
+    if (error) {
+      sessionStorage.removeItem("auth_redirect");
+      showToast(error.message, "error");
+    }
   }
 
   async function handleLogin(e: React.FormEvent) {
@@ -129,6 +134,7 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
       reset();
       onClose();
       showToast("Welcome back!", "success");
+      window.location.href = "/courses/";
     }
   }
 
@@ -151,7 +157,7 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
       email,
       password,
       options: {
-        emailRedirectTo: getAuthCallbackUrl("/"),
+        emailRedirectTo: getAuthCallbackUrl("/courses"),
         data: {
           full_name: fullName,
           ...(avatarDataUrl ? { avatar_url: avatarDataUrl, pending_avatar_upload: true } : {}),
@@ -185,6 +191,7 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
       reset();
       onClose();
       showToast("Email verified! Welcome to The Puffer Labs.", "success");
+      window.location.href = "/courses/";
     }
   }
 

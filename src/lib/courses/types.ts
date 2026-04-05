@@ -26,6 +26,9 @@ export interface CourseInfo extends CourseMeta {
   thumbnailUrl: string;
   freeContentCount: number;
   premiumContentCount: number;
+  priceCents: number;
+  currency: string;
+  comparePriceCents: number | null;
 }
 
 export interface ContentEntry {

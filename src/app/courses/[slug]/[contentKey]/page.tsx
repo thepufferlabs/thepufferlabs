@@ -1,5 +1,5 @@
 import { discoverCourseRepos, getCourseBySlug } from "@/lib/courses/registry";
-import { fetchContentIndex, fetchMarkdownContent, getContentEntry, stripFrontmatter } from "@/lib/courses/content-loader";
+import { fetchContentIndex, fetchSidebar, fetchMarkdownContent, getContentEntry, stripFrontmatter } from "@/lib/courses/content-loader";
 import MarkdownRenderer from "@/components/docs/MarkdownRenderer";
 import PremiumGate from "@/components/courses/PremiumGate";
 import Link from "next/link";
@@ -9,15 +9,34 @@ export async function generateStaticParams() {
   const params: { slug: string; contentKey: string }[] = [];
 
   for (const product of products) {
+    const seen = new Set<string>();
+
     try {
+      // Content index has free (and possibly premium) entries
       const contentIndex = await fetchContentIndex(product.slug);
       for (const item of contentIndex) {
-        if (item.isPublished !== false) {
+        if (item.isPublished !== false && !seen.has(item.contentKey)) {
+          seen.add(item.contentKey);
           params.push({ slug: product.slug, contentKey: item.contentKey });
         }
       }
     } catch (err) {
-      console.error(`Failed to generate params for ${product.slug}:`, err);
+      console.error(`Failed to fetch content index for ${product.slug}:`, err);
+    }
+
+    try {
+      // Sidebar may reference premium content keys not in product_content
+      const sidebar = await fetchSidebar(product.slug);
+      for (const section of sidebar.sections) {
+        for (const item of section.items) {
+          if (item.contentKey && !seen.has(item.contentKey)) {
+            seen.add(item.contentKey);
+            params.push({ slug: product.slug, contentKey: item.contentKey });
+          }
+        }
+      }
+    } catch (err) {
+      console.error(`Failed to fetch sidebar for ${product.slug}:`, err);
     }
   }
 
@@ -57,23 +76,33 @@ export default async function ContentPage({ params }: PageProps) {
 
   const contentEntry = getContentEntry(contentIndex, contentKey);
 
+  // Content not in product_content table → treat as premium (requires purchase)
   if (!contentEntry) {
     return (
-      <div className="py-20 text-center">
-        <h1 className="text-xl font-bold text-text-primary mb-2">Content not found</h1>
-        <p className="text-text-muted text-sm mb-4">No content found for &ldquo;{contentKey}&rdquo;.</p>
-        <Link href={`${basePath}/courses/${slug}/`} className="text-teal hover:underline text-sm">
-          &larr; Back to course overview
-        </Link>
+      <div className="max-w-4xl mx-auto px-4 sm:px-8 py-6">
+        <div className="flex items-center gap-2 text-xs text-text-dim font-mono mb-6">
+          <Link href={`${basePath}/courses/`} className="hover:text-teal transition-colors">
+            courses
+          </Link>
+          <span>/</span>
+          <Link href={`${basePath}/courses/${slug}/`} className="hover:text-teal transition-colors">
+            {slug}
+          </Link>
+          <span>/</span>
+          <span className="text-amber-400">{contentKey}</span>
+        </div>
+        <PremiumGate
+          title={contentKey.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
+          tags={[]}
+        />
       </div>
     );
   }
 
-  // Premium content: show gate, don't fetch markdown
+  // Premium content in product_content: show gate
   if (contentEntry.accessLevel === "premium") {
     return (
       <div className="max-w-4xl mx-auto px-4 sm:px-8 py-6">
-        {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-xs text-text-dim font-mono mb-6">
           <Link href={`${basePath}/courses/`} className="hover:text-teal transition-colors">
             courses

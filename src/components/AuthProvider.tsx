@@ -126,10 +126,14 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
       if (session?.user && (event === "SIGNED_IN" || event === "TOKEN_REFRESHED")) {
         syncProfile(session.user);
 
-        // Clean up auth hash from URL after successful sign-in
-        if (typeof window !== "undefined" && window.location.hash.includes("access_token")) {
-          window.history.replaceState(null, "", window.location.pathname);
-          showToast("Email verified! Welcome to The Puffer Labs.", "success");
+        // Check for pending redirect (set before OAuth flow or email confirmation)
+        if (typeof window !== "undefined" && event === "SIGNED_IN") {
+          const pendingRedirect = sessionStorage.getItem("auth_redirect");
+          if (pendingRedirect) {
+            sessionStorage.removeItem("auth_redirect");
+            showToast("Welcome to The Puffer Labs!", "success");
+            window.location.href = pendingRedirect;
+          }
         }
       }
     });
@@ -147,6 +151,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
     }
     setUser(null);
     setSession(null);
+    window.location.href = "/";
   }
 
   return <AuthContext.Provider value={{ user, session, loading, signOut }}>{children}</AuthContext.Provider>;

@@ -90,94 +90,113 @@ export default function Navbar() {
           <div className="hidden md:flex items-center gap-1">
             {NAV_LINKS.map((link) => {
               const active = isActive(link.href);
+              const isCourses = link.href === "/courses";
+
+              // Courses link: if not logged in, open auth modal instead of navigating
+              if (isCourses && !loading && !user) {
+                return (
+                  <button
+                    key={link.label}
+                    onClick={() => setAuthOpen(true)}
+                    className={`px-4 py-2 text-sm transition-colors rounded-lg flex items-center gap-1.5 cursor-pointer ${
+                      active ? "text-teal font-medium bg-teal/10" : "text-text-muted hover:text-text-primary hover:bg-[var(--theme-white-alpha-5)]"
+                    }`}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" className="text-amber-400">
+                      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                    </svg>
+                    {link.label}
+                  </button>
+                );
+              }
+
               return (
                 <Link
                   key={link.label}
                   href={resolveHref(link.href)}
-                  className={`px-4 py-2 text-sm transition-colors rounded-lg ${
+                  className={`px-4 py-2 text-sm transition-colors rounded-lg flex items-center gap-1.5 ${
                     active ? "text-teal font-medium bg-teal/10" : "text-text-muted hover:text-text-primary hover:bg-[var(--theme-white-alpha-5)]"
                   }`}
                 >
+                  {isCourses && (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" className="text-amber-400">
+                      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                    </svg>
+                  )}
                   {link.label}
                 </Link>
               );
             })}
             <ThemeToggle className="ml-2" />
 
-            {/* User avatar / Sign in */}
-            {!loading && (
+            {/* User avatar (only when logged in) */}
+            {!loading && user && (
               <div className="ml-2">
-                {user ? (
-                  <div className="relative" ref={profileRef}>
-                    <button
-                      onClick={() => setProfileOpen(!profileOpen)}
-                      className="flex items-center rounded-full transition-all hover:ring-2 hover:ring-teal/30 cursor-pointer"
-                      aria-label="Account menu"
-                      aria-expanded={profileOpen}
-                    >
-                      <UserAvatar user={user} size={34} />
-                    </button>
+                <div className="relative" ref={profileRef}>
+                  <button
+                    onClick={() => setProfileOpen(!profileOpen)}
+                    className="flex items-center rounded-full transition-all hover:ring-2 hover:ring-teal/30 cursor-pointer"
+                    aria-label="Account menu"
+                    aria-expanded={profileOpen}
+                  >
+                    <UserAvatar user={user} size={34} />
+                  </button>
 
-                    {/* Dropdown */}
-                    {profileOpen && (
-                      <div
-                        className="absolute right-0 top-full mt-2 w-72 rounded-xl border p-1 shadow-xl"
-                        style={{
-                          background: "var(--color-navy)",
-                          borderColor: "var(--theme-border)",
-                          boxShadow: "0 8px 40px rgba(0,0,0,0.3)",
-                        }}
-                      >
-                        {/* Account info */}
-                        <div className="px-4 py-3 border-b" style={{ borderColor: "var(--theme-border)" }}>
-                          <div className="flex items-center gap-3">
-                            <UserAvatar user={user} size={40} />
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm font-medium text-text-primary truncate">{displayName}</p>
-                              <p className="text-xs text-text-muted truncate">{user.email}</p>
-                              <span className="inline-block mt-1 text-[10px] font-medium uppercase tracking-wider text-text-dim bg-[var(--theme-white-alpha-5)] rounded px-1.5 py-0.5">{provider}</span>
-                            </div>
+                  {/* Dropdown */}
+                  {profileOpen && (
+                    <div
+                      className="absolute right-0 top-full mt-2 w-72 rounded-xl border p-1 shadow-xl"
+                      style={{
+                        background: "var(--color-navy)",
+                        borderColor: "var(--theme-border)",
+                        boxShadow: "0 8px 40px rgba(0,0,0,0.3)",
+                      }}
+                    >
+                      {/* Account info */}
+                      <div className="px-4 py-3 border-b" style={{ borderColor: "var(--theme-border)" }}>
+                        <div className="flex items-center gap-3">
+                          <UserAvatar user={user} size={40} />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium text-text-primary truncate">{displayName}</p>
+                            <p className="text-xs text-text-muted truncate">{user.email}</p>
+                            <span className="inline-block mt-1 text-[10px] font-medium uppercase tracking-wider text-text-dim bg-[var(--theme-white-alpha-5)] rounded px-1.5 py-0.5">{provider}</span>
                           </div>
                         </div>
-
-                        {/* Actions */}
-                        <div className="py-1">
-                          <button
-                            onClick={() => {
-                              setProfileOpen(false);
-                              window.location.href = `${basePath}/account/`;
-                            }}
-                            className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-text-muted hover:text-text-primary hover:bg-[var(--theme-white-alpha-5)] rounded-lg transition-colors cursor-pointer"
-                          >
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
-                              <circle cx="12" cy="7" r="4" />
-                            </svg>
-                            Account Info
-                          </button>
-                          <button
-                            onClick={() => {
-                              setProfileOpen(false);
-                              signOut();
-                            }}
-                            className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
-                          >
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
-                              <polyline points="16 17 21 12 16 7" />
-                              <line x1="21" y1="12" x2="9" y2="12" />
-                            </svg>
-                            Log Out
-                          </button>
-                        </div>
                       </div>
-                    )}
-                  </div>
-                ) : (
-                  <Button variant="ghost" size="sm" onClick={() => setAuthOpen(true)}>
-                    Sign In
-                  </Button>
-                )}
+
+                      {/* Actions */}
+                      <div className="py-1">
+                        <button
+                          onClick={() => {
+                            setProfileOpen(false);
+                            window.location.href = `${basePath}/account/`;
+                          }}
+                          className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-text-muted hover:text-text-primary hover:bg-[var(--theme-white-alpha-5)] rounded-lg transition-colors cursor-pointer"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+                            <circle cx="12" cy="7" r="4" />
+                          </svg>
+                          Account Info
+                        </button>
+                        <button
+                          onClick={() => {
+                            setProfileOpen(false);
+                            signOut();
+                          }}
+                          className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
+                            <polyline points="16 17 21 12 16 7" />
+                            <line x1="21" y1="12" x2="9" y2="12" />
+                          </svg>
+                          Log Out
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -207,74 +226,88 @@ export default function Navbar() {
             <div className="flex flex-col gap-1 px-6 py-4">
               {NAV_LINKS.map((link) => {
                 const active = isActive(link.href);
+                const isCourses = link.href === "/courses";
+
+                // Courses link: if not logged in, open auth modal
+                if (isCourses && !loading && !user) {
+                  return (
+                    <button
+                      key={link.label}
+                      onClick={() => {
+                        setOpen(false);
+                        setAuthOpen(true);
+                      }}
+                      className={`px-4 py-3 text-sm transition-colors rounded-lg flex items-center gap-1.5 cursor-pointer ${
+                        active ? "text-teal font-medium bg-teal/10" : "text-text-muted hover:text-text-primary hover:bg-[var(--theme-white-alpha-5)]"
+                      }`}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" className="text-amber-400">
+                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                      </svg>
+                      {link.label}
+                    </button>
+                  );
+                }
+
                 return (
                   <Link
                     key={link.label}
                     href={resolveHref(link.href)}
-                    className={`px-4 py-3 text-sm transition-colors rounded-lg ${
+                    className={`px-4 py-3 text-sm transition-colors rounded-lg flex items-center gap-1.5 ${
                       active ? "text-teal font-medium bg-teal/10" : "text-text-muted hover:text-text-primary hover:bg-[var(--theme-white-alpha-5)]"
                     }`}
                     onClick={() => setOpen(false)}
                   >
+                    {isCourses && (
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" className="text-amber-400">
+                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                      </svg>
+                    )}
                     {link.label}
                   </Link>
                 );
               })}
               <ThemeToggle showLabel />
 
-              {/* Mobile auth */}
-              {!loading && (
+              {/* Mobile user menu (only when logged in) */}
+              {!loading && user && (
                 <div className="mt-2">
-                  {user ? (
-                    <div className="flex flex-col gap-1 border-t pt-3" style={{ borderColor: "var(--theme-border)" }}>
-                      <div className="flex items-center gap-3 px-4 py-2">
-                        <UserAvatar user={user} size={36} />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-text-primary truncate">{displayName}</p>
-                          <p className="text-xs text-text-muted truncate">{user.email}</p>
-                        </div>
+                  <div className="flex flex-col gap-1 border-t pt-3" style={{ borderColor: "var(--theme-border)" }}>
+                    <div className="flex items-center gap-3 px-4 py-2">
+                      <UserAvatar user={user} size={36} />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-text-primary truncate">{displayName}</p>
+                        <p className="text-xs text-text-muted truncate">{user.email}</p>
                       </div>
-                      <button
-                        onClick={() => {
-                          setOpen(false);
-                          window.location.href = `${basePath}/account/`;
-                        }}
-                        className="flex items-center gap-3 px-4 py-2.5 text-sm text-text-muted hover:text-text-primary hover:bg-[var(--theme-white-alpha-5)] rounded-lg transition-colors cursor-pointer"
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
-                          <circle cx="12" cy="7" r="4" />
-                        </svg>
-                        Account Info
-                      </button>
-                      <button
-                        onClick={() => {
-                          setOpen(false);
-                          signOut();
-                        }}
-                        className="flex items-center gap-3 px-4 py-2.5 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
-                          <polyline points="16 17 21 12 16 7" />
-                          <line x1="21" y1="12" x2="9" y2="12" />
-                        </svg>
-                        Log Out
-                      </button>
                     </div>
-                  ) : (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      className="w-full"
+                    <button
                       onClick={() => {
                         setOpen(false);
-                        setAuthOpen(true);
+                        window.location.href = `${basePath}/account/`;
                       }}
+                      className="flex items-center gap-3 px-4 py-2.5 text-sm text-text-muted hover:text-text-primary hover:bg-[var(--theme-white-alpha-5)] rounded-lg transition-colors cursor-pointer"
                     >
-                      Sign In
-                    </Button>
-                  )}
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+                        <circle cx="12" cy="7" r="4" />
+                      </svg>
+                      Account Info
+                    </button>
+                    <button
+                      onClick={() => {
+                        setOpen(false);
+                        signOut();
+                      }}
+                      className="flex items-center gap-3 px-4 py-2.5 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
+                        <polyline points="16 17 21 12 16 7" />
+                        <line x1="21" y1="12" x2="9" y2="12" />
+                      </svg>
+                      Log Out
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

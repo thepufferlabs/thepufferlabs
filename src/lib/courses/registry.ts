@@ -20,6 +20,9 @@ export interface CourseProduct {
   storagePrefix: string | null;
   updatedAt: string;
   lastSyncedAt: string | null;
+  priceCents: number;
+  currency: string;
+  comparePriceCents: number | null;
 }
 
 function mapProductRow(row: ProductRow): CourseProduct {
@@ -40,6 +43,9 @@ function mapProductRow(row: ProductRow): CourseProduct {
     storagePrefix: row.storage_prefix,
     updatedAt: row.updated_at,
     lastSyncedAt: row.last_synced_at,
+    priceCents: row.price_cents,
+    currency: row.currency,
+    comparePriceCents: row.compare_price_cents,
   };
 }
 

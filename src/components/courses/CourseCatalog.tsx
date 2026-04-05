@@ -70,6 +70,14 @@ function estimateDuration(docCount: number): string {
   return `~${hrs} hr${hrs > 1 ? "s" : ""}`;
 }
 
+function formatPrice(cents: number, currency: string): string {
+  const amount = cents / 100;
+  const code = currency.toUpperCase();
+  if (code === "INR") return `\u20B9${amount.toLocaleString("en-IN")}`;
+  if (code === "USD") return `$${amount.toLocaleString("en-US")}`;
+  return `${amount.toLocaleString()} ${code}`;
+}
+
 const QUALIFIER_KEYS = ["category", "topic", "level", "status"] as const;
 
 export default function CourseCatalog({ courses, basePath }: CourseCatalogProps) {
@@ -412,7 +420,16 @@ function EnhancedCourseCard({ course, basePath }: { course: CourseInfo; basePath
       {/* Footer: updated + price */}
       <div className="flex items-center justify-between mt-auto pt-3 border-t border-[var(--theme-border)]">
         <span className="text-[10px] text-text-dim">{course.updatedAt ? `Updated ${timeAgo(course.updatedAt)}` : ""}</span>
-        <span className="text-xs font-semibold text-teal group-hover:translate-x-0.5 transition-transform">Free preview &rarr;</span>
+        <div className="flex items-center gap-2">
+          {course.comparePriceCents != null && course.comparePriceCents > 0 && (
+            <span className="text-[11px] text-text-dim line-through">
+              {formatPrice(course.comparePriceCents, course.currency)}
+            </span>
+          )}
+          <span className="text-sm font-bold text-teal">
+            {course.priceCents > 0 ? formatPrice(course.priceCents, course.currency) : "Free"}
+          </span>
+        </div>
       </div>
     </Link>
   );
