@@ -1,0 +1,244 @@
+# =============================================================================
+# Reusable workflow: Sync course content from GitHub repo → Supabase
+# =============================================================================
+# Syncs files to storage buckets and upserts metadata to DB tables:
+#   - products (Domain 2)
+#   - product_content (Domain 2)
+#   - course_details (Domain 5)
+#
+# Called by individual course repos:
+#   uses: senapatisantosh/thepufferlabs/.github/workflows/sync-course-content.yml@main
+# =============================================================================
+
+name: Sync Course Content
+
+on:
+  workflow_call:
+    inputs:
+      product-slug:
+        description: 'Product slug (must match meta.json slug)'
+        required: true
+        type: string
+      content-branch:
+        description: 'Branch to sync from'
+        required: false
+        type: string
+        default: ''
+    secrets:
+      SUPABASE_URL:
+        required: true
+      SUPABASE_SERVICE_ROLE_KEY:
+        required: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SLUG: ${{ inputs.product-slug }}
+
+    steps:
+      - name: Checkout course repo
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.content-branch || github.ref }}
+
+      - name: Validate meta.json
+        run: |
+          if [ ! -f meta.json ]; then
+            echo "::error::meta.json not found"
+            exit 1
+          fi
+          echo "SLUG=$(jq -r '.slug' meta.json)" >> $GITHUB_ENV
+
+      # ── Storage sync ────────────────────────────────────
+
+      - name: Sync free content → public bucket
+        run: |
+          upload() {
+            local file="$1" bucket="$2"
+            local path="${SLUG}/${file}"
+            local mime=$(file -b --mime-type "$file")
+            curl -s -X POST "${SUPABASE_URL}/storage/v1/object/${bucket}/${path}" \
+              -H "Authorization: Bearer ${SUPABASE_KEY}" \
+              -H "Content-Type: ${mime}" \
+              -H "x-upsert: true" \
+              --data-binary @"$file" -o /dev/null -w "%{http_code}" | xargs -I{} echo "  {} $file"
+          }
+
+          echo "=== Free docs ==="
+          find docs/free -name '*.md' 2>/dev/null | while read f; do upload "$f" "free-content"; done
+
+          echo "=== Free blogs ==="
+          find blog/public -name '*.md' 2>/dev/null | while read f; do upload "$f" "free-content"; done
+
+          echo "=== Free code samples ==="
+          find src/samples -type f 2>/dev/null | while read f; do upload "$f" "free-content"; done
+
+          echo "=== Shared metadata ==="
+          for f in docs/shared/*.json meta.json; do
+            [ -f "$f" ] && upload "$f" "free-content"
+          done
+
+      - name: Sync premium content → private bucket
+        run: |
+          upload() {
+            local file="$1"
+            local path="${SLUG}/${file}"
+            local mime=$(file -b --mime-type "$file")
+            curl -s -X POST "${SUPABASE_URL}/storage/v1/object/premium-content/${path}" \
+              -H "Authorization: Bearer ${SUPABASE_KEY}" \
+              -H "Content-Type: ${mime}" \
+              -H "x-upsert: true" \
+              --data-binary @"$file" -o /dev/null -w "%{http_code}" | xargs -I{} echo "  {} $file"
+          }
+
+          echo "=== Premium docs ==="
+          find docs/premium -name '*.md' 2>/dev/null | while read f; do upload "$f"; done
+
+          echo "=== Premium blogs ==="
+          find blog/premium -name '*.md' 2>/dev/null | while read f; do upload "$f"; done
+
+          echo "=== Premium code ==="
+          find src/premium -type f 2>/dev/null | while read f; do upload "$f"; done
+
+      - name: Sync assets → public bucket
+        run: |
+          find assets -type f 2>/dev/null | while read f; do
+            path="${SLUG}/${f}"
+            mime=$(file -b --mime-type "$f")
+            curl -s -X POST "${SUPABASE_URL}/storage/v1/object/course-assets/${path}" \
+              -H "Authorization: Bearer ${SUPABASE_KEY}" \
+              -H "Content-Type: ${mime}" \
+              -H "x-upsert: true" \
+              --data-binary @"$f" -o /dev/null -w "%{http_code}" | xargs -I{} echo "  {} $f"
+          done
+
+      # ── Database sync ───────────────────────────────────
+
+      - name: Upsert product record (Domain 2)
+        run: |
+          META=$(cat meta.json)
+          FREE=$(echo "$META" | jq '.previewDocPaths | length')
+          PREMIUM=$(echo "$META" | jq '.premiumDocPaths | length')
+
+          PAYLOAD=$(jq -n \
+            --arg slug "$(echo "$META" | jq -r '.slug')" \
+            --arg title "$(echo "$META" | jq -r '.title')" \
+            --arg desc "$(echo "$META" | jq -r '.shortDescription')" \
+            --arg cat "$(echo "$META" | jq -r '.category')" \
+            --arg level "$(echo "$META" | jq -r '.level')" \
+            --argjson tags "$(echo "$META" | jq '.tags')" \
+            --arg status "$(echo "$META" | jq -r '.status // "published"')" \
+            --arg version "$(echo "$META" | jq -r '.version // "1.0.0"')" \
+            --arg banner "$(echo "$META" | jq -r '.banner // ""')" \
+            --arg thumb "$(echo "$META" | jq -r '.thumbnail // ""')" \
+            --arg owner "${{ github.repository_owner }}" \
+            --arg repo "${{ github.event.repository.name }}" \
+            --arg branch "${{ github.ref_name }}" \
+            --argjson free "$FREE" \
+            --argjson premium "$PREMIUM" \
+            '{
+              slug: $slug, product_type: "course", title: $title,
+              short_description: $desc, category: $cat, level: $level, tags: $tags,
+              status: (if $status == "published" then "published" else "draft" end),
+              version: $version,
+              banner_path: (if $banner != "" then ($slug + "/" + $banner) else null end),
+              thumbnail_path: (if $thumb != "" then ($slug + "/" + $thumb) else null end),
+              github_owner: $owner, github_repo: $repo, github_branch: $branch,
+              storage_prefix: ($slug + "/"),
+              free_content_count: $free, premium_content_count: $premium,
+              last_synced_at: (now | todate)
+            }')
+
+          curl -sf -X POST "${SUPABASE_URL}/rest/v1/products" \
+            -H "apikey: ${SUPABASE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_KEY}" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: resolution=merge-duplicates" \
+            -d "$PAYLOAD"
+          echo "✅  Product upserted"
+
+      - name: Sync content index (Domain 2)
+        run: |
+          CI="docs/shared/content-index.json"
+          [ -f "$CI" ] || exit 0
+
+          PID=$(curl -sf "${SUPABASE_URL}/rest/v1/products?slug=eq.${SLUG}&select=id" \
+            -H "apikey: ${SUPABASE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_KEY}" | jq -r '.[0].id')
+
+          [ "$PID" = "null" ] && echo "::error::Product not found" && exit 1
+
+          ITEMS=$(jq 'if type == "array" then . else .items // [] end' "$CI")
+
+          PAYLOAD=$(echo "$ITEMS" | jq --arg pid "$PID" --arg slug "$SLUG" '[
+            .[] | select(.isPublished != false) | {
+              product_id: $pid, content_key: .contentKey, title: .title,
+              section: .section, access_level: .accessLevel,
+              content_type: (.contentType // "doc"),
+              storage_path: (if .accessLevel == "free" then "free-content/" else "premium-content/" end) + $slug + "/" + .sourcePath,
+              tags: (.tags // []), sort_order: (.order // 0), is_published: true
+            }
+          ]')
+
+          # Replace all content entries
+          curl -sf -X DELETE "${SUPABASE_URL}/rest/v1/product_content?product_id=eq.${PID}" \
+            -H "apikey: ${SUPABASE_KEY}" -H "Authorization: Bearer ${SUPABASE_KEY}"
+
+          curl -sf -X POST "${SUPABASE_URL}/rest/v1/product_content" \
+            -H "apikey: ${SUPABASE_KEY}" -H "Authorization: Bearer ${SUPABASE_KEY}" \
+            -H "Content-Type: application/json" -d "$PAYLOAD"
+
+          echo "✅  $(echo "$PAYLOAD" | jq length) content entries synced"
+
+      - name: Upsert course details (Domain 5)
+        run: |
+          PID=$(curl -sf "${SUPABASE_URL}/rest/v1/products?slug=eq.${SLUG}&select=id" \
+            -H "apikey: ${SUPABASE_KEY}" -H "Authorization: Bearer ${SUPABASE_KEY}" | jq -r '.[0].id')
+
+          META=$(cat meta.json)
+          SIDEBAR=$(cat docs/shared/sidebar.json 2>/dev/null || echo '{}')
+          TOC=$(cat docs/shared/toc.json 2>/dev/null || echo '{}')
+          BLOGS=$(echo "$META" | jq '(.publicBlogPaths | length) + (.premiumBlogPaths | length)')
+          CODE=$(echo "$META" | jq '(.sampleCodePaths | length) + (.premiumCodePaths | length)')
+          CHEAT=$(echo "$META" | jq '[.premiumDocPaths[] | select(contains("cheatsheet"))] | length')
+          INTERVIEW=$(echo "$META" | jq '[.premiumDocPaths[] | select(contains("interview"))] | length > 0')
+          TOTAL_DOCS=$(echo "$META" | jq '(.previewDocPaths | length) + (.premiumDocPaths | length)')
+          HOURS=$(echo "$TOTAL_DOCS" | awk '{printf "%.1f", $1 * 0.2}')
+
+          PAYLOAD=$(jq -n \
+            --arg pid "$PID" \
+            --argjson sidebar "$SIDEBAR" \
+            --argjson toc "$TOC" \
+            --argjson blogs "$BLOGS" \
+            --argjson code "$CODE" \
+            --argjson cheat "$CHEAT" \
+            --argjson interview "$INTERVIEW" \
+            --arg hours "$HOURS" \
+            '{
+              product_id: $pid, sidebar_data: $sidebar, toc_data: $toc,
+              blog_count: $blogs, code_sample_count: $code,
+              cheatsheet_count: $cheat, has_interview_prep: $interview,
+              estimated_hours: ($hours | tonumber),
+              last_content_update: (now | todate)
+            }')
+
+          curl -sf -X POST "${SUPABASE_URL}/rest/v1/course_details" \
+            -H "apikey: ${SUPABASE_KEY}" -H "Authorization: Bearer ${SUPABASE_KEY}" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: resolution=merge-duplicates" \
+            -d "$PAYLOAD"
+          echo "✅  Course details upserted"
+
+      - name: Summary
+        run: |
+          echo "## Sync Complete: \`${SLUG}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| | Count |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| Free docs | $(find docs/free -name '*.md' 2>/dev/null | wc -l | tr -d ' ') |" >> $GITHUB_STEP_SUMMARY
+          echo "| Premium docs | $(find docs/premium -name '*.md' 2>/dev/null | wc -l | tr -d ' ') |" >> $GITHUB_STEP_SUMMARY
+          echo "| Assets | $(find assets -type f 2>/dev/null | wc -l | tr -d ' ') |" >> $GITHUB_STEP_SUMMARY
+          echo "| Code samples | $(find src -type f 2>/dev/null | wc -l | tr -d ' ') |" >> $GITHUB_STEP_SUMMARY

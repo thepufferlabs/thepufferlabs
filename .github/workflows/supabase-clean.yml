@@ -35,7 +35,7 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
-      # Storage must be emptied FIRST via REST API (Supabase blocks direct SQL deletes)
+      # Step 1: Empty storage buckets via REST API (must happen before SQL)
       - name: Empty storage buckets
         env:
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
@@ -43,19 +43,19 @@ jobs:
         run: |
           BASE="https://${SUPABASE_PROJECT_REF}.supabase.co/storage/v1"
           for bucket in avatars free-content premium-content course-assets; do
-            # Empty the bucket
             code=$(curl -s -o /dev/null -w "%{http_code}" \
               -X POST "${BASE}/bucket/${bucket}/empty" \
               -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
               -H "Content-Type: application/json")
             if [ "$code" = "200" ]; then
-              echo "✅  Emptied bucket: $bucket"
+              echo "✅  Emptied: $bucket"
             else
-              echo "⏭️  Bucket $bucket: HTTP $code (may not exist)"
+              echo "⏭️  $bucket: HTTP $code (may not exist)"
             fi
           done
 
-      - name: Delete storage buckets (full clean only)
+      # Step 2a: Full clean — delete buckets then drop all schema
+      - name: Delete storage buckets
         if: inputs.scope == 'full-schema-and-data'
         env:
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
@@ -67,23 +67,24 @@ jobs:
               -X DELETE "${BASE}/bucket/${bucket}" \
               -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}")
             if [ "$code" = "200" ]; then
-              echo "✅  Deleted bucket: $bucket"
+              echo "✅  Deleted: $bucket"
             else
-              echo "⏭️  Bucket $bucket delete: HTTP $code"
+              echo "⏭️  $bucket: HTTP $code"
             fi
           done
 
-      - name: Clean — full schema + data (drop all tables)
+      - name: Drop all schema + data
         if: inputs.scope == 'full-schema-and-data'
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: |
-          echo "⚠️  Dropping ALL product/entitlement tables and data..."
+          echo "⚠️  Dropping ALL tables across all domains..."
           supabase db query --linked --file supabase/migrations/20260405_000_cleanup.sql
-          echo "✅  Product schema cleaned"
+          echo "✅  Full schema cleaned"
 
-      - name: Clean — data only (truncate all tables)
+      # Step 2b: Data only — truncate all tables, keep schema
+      - name: Truncate all data
         if: inputs.scope == 'data-only'
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -91,62 +92,47 @@ jobs:
         run: |
           supabase db query --linked <<'SQL'
           DO $$
+          DECLARE
+            t TEXT;
+            tables TEXT[] := ARRAY[
+              -- Domain 5: Courses
+              'user_bookmarks',
+              'user_course_progress',
+              'course_details',
+              -- Domain 4: Payments
+              'refunds',
+              'orders',
+              'coupons',
+              -- Domain 3: Licensing
+              'user_entitlements',
+              'subscriptions',
+              'bundle_products',
+              'bundles',
+              'plan_products',
+              'plans',
+              -- Domain 2: Products
+              'product_content',
+              'products',
+              -- Domain 1: Users
+              'audit_log',
+              'user_identities',
+              'profiles',
+              'schema_migrations'
+            ];
           BEGIN
-            -- Truncate product/commerce tables (skip if they don't exist)
-            IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'user_entitlements') THEN
-              TRUNCATE public.user_entitlements CASCADE;
-            END IF;
-            IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'subscriptions') THEN
-              TRUNCATE public.subscriptions CASCADE;
-            END IF;
-            IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'orders') THEN
-              TRUNCATE public.orders CASCADE;
-            END IF;
-            IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'coupons') THEN
-              TRUNCATE public.coupons CASCADE;
-            END IF;
-            IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'bundle_products') THEN
-              TRUNCATE public.bundle_products CASCADE;
-            END IF;
-            IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'bundles') THEN
-              TRUNCATE public.bundles CASCADE;
-            END IF;
-            IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'plan_products') THEN
-              TRUNCATE public.plan_products CASCADE;
-            END IF;
-            IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'plans') THEN
-              TRUNCATE public.plans CASCADE;
-            END IF;
-            IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'product_content') THEN
-              TRUNCATE public.product_content CASCADE;
-            END IF;
-            IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'products') THEN
-              TRUNCATE public.products CASCADE;
-            END IF;
-
-            -- Truncate user tables
-            IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'audit_log') THEN
-              TRUNCATE public.audit_log CASCADE;
-            END IF;
-            IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'purchases') THEN
-              TRUNCATE public.purchases CASCADE;
-            END IF;
-            IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'user_identities') THEN
-              TRUNCATE public.user_identities CASCADE;
-            END IF;
-            IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'profiles') THEN
-              TRUNCATE public.profiles CASCADE;
-            END IF;
-            IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'schema_migrations') THEN
-              TRUNCATE public.schema_migrations CASCADE;
-            END IF;
+            FOREACH t IN ARRAY tables LOOP
+              IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = t) THEN
+                EXECUTE format('TRUNCATE public.%I CASCADE', t);
+                RAISE NOTICE 'Truncated: %', t;
+              END IF;
+            END LOOP;
           END $$;
 
           -- Delete auth users
           DELETE FROM auth.users;
           SQL
 
-          echo "✅  All data truncated"
+          echo "✅  All data truncated (schema preserved)"
 
       - name: Summary
         run: |
