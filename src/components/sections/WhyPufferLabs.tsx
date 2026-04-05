@@ -44,7 +44,7 @@ export default function WhyPufferLabs() {
               alt="The Puffer Labs pufferfish mascot"
               width={250}
               height={250}
-              className="object-contain drop-shadow-[0_0_50px_rgba(45,212,191,0.25)] max-w-[250px]"
+              className="object-contain drop-shadow-[0_0_50px_rgba(45,212,191,0.25)] max-w-[250px] h-auto"
               loading="eager"
               priority
             />

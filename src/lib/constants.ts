@@ -10,6 +10,7 @@ export const NAV_LINKS = [
   { label: "About Me", href: "/about" },
   { label: "Blogs", href: "/blogs" },
   { label: "Docs", href: "/docs" },
+  { label: "Courses", href: "/courses" },
 ] as const;
 
 export const SOCIAL_LINKS = [

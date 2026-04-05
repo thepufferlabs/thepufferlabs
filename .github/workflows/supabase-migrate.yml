@@ -6,6 +6,7 @@ on:
     paths:
       - "scripts/migrations/*.sql"
       - "scripts/supabase-schema.sql"
+      - "supabase/migrations/*.sql"
   workflow_dispatch:
 
 jobs:
@@ -40,12 +41,12 @@ jobs:
           );
           SQL
 
-          # Run each migration file in order, skip already-applied ones
+          # Run migrations from scripts/migrations/ (legacy)
           for file in scripts/migrations/*.sql; do
+            [ -f "$file" ] || continue
             version=$(basename "$file" | cut -d'_' -f1)
             name=$(basename "$file" .sql)
 
-            # Check if already applied
             result=$(supabase db query --linked --output csv \
               "SELECT version FROM public.schema_migrations WHERE version = '$version'")
 
@@ -54,6 +55,35 @@ jobs:
             else
               echo "▶️  Applying $name..."
               supabase db query --linked --file "$file"
+              echo "✅  Applied $name"
+            fi
+          done
+
+          # Run migrations from supabase/migrations/ (new standard path)
+          for file in supabase/migrations/*.sql; do
+            [ -f "$file" ] || continue
+
+            # Skip cleanup script — that's manual only
+            if echo "$file" | grep -q "_000_cleanup"; then
+              echo "⏭️  Skipping cleanup script (manual only)"
+              continue
+            fi
+
+            version=$(basename "$file" | cut -d'_' -f1-2)
+            name=$(basename "$file" .sql)
+
+            result=$(supabase db query --linked --output csv \
+              "SELECT version FROM public.schema_migrations WHERE version = '$version'")
+
+            if echo "$result" | grep -q "$version"; then
+              echo "⏭️  Skipping $name (already applied)"
+            else
+              echo "▶️  Applying $name..."
+              supabase db query --linked --file "$file"
+
+              # Record migration
+              supabase db query --linked \
+                "INSERT INTO public.schema_migrations (version, name) VALUES ('$version', '$name') ON CONFLICT (version) DO NOTHING"
               echo "✅  Applied $name"
             fi
           done

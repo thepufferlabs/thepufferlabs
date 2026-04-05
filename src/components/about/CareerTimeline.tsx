@@ -188,7 +188,7 @@ function TimelineCard({ milestone, index }: { milestone: Milestone; index: numbe
               }`}
             >
               {milestone.logo ? (
-                <Image src={`${basePath}${milestone.logo}`} alt={milestone.company} width={28} height={28} className="object-contain" />
+                <Image src={`${basePath}${milestone.logo}`} alt={milestone.company} width={28} height={28} className="object-contain w-auto h-auto" />
               ) : (
                 <span className="font-bold text-xs tracking-tight text-text-dim">{milestone.companyShort}</span>
               )}

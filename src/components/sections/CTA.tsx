@@ -31,7 +31,7 @@ export default function CTA() {
             alt="The Puffer Labs mascot"
             width={250}
             height={250}
-            className="object-contain drop-shadow-[0_0_30px_rgba(45,212,191,0.3)] animate-float max-w-[250px]"
+            className="object-contain drop-shadow-[0_0_30px_rgba(45,212,191,0.3)] animate-float max-w-[250px] h-auto"
           />
         </div>
 

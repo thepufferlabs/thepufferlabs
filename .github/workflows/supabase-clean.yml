@@ -7,10 +7,18 @@ on:
         description: 'Type "DELETE ALL DATA" to confirm'
         required: true
         type: string
+      scope:
+        description: 'What to clean'
+        required: true
+        type: choice
+        options:
+          - data-only
+          - full-schema-and-data
+        default: data-only
 
 jobs:
   clean:
-    name: Clean All DB Data
+    name: Clean DB
     runs-on: ubuntu-latest
     if: github.event.inputs.confirm == 'DELETE ALL DATA'
     steps:
@@ -27,40 +35,75 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
-      - name: Clean all data
+      - name: Clean — full schema + data (products, entitlements, storage)
+        if: inputs.scope == 'full-schema-and-data'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          echo "⚠️  Dropping ALL product/entitlement tables, storage, and data..."
+          supabase db query --linked --file supabase/migrations/20260405_000_cleanup.sql
+          echo "✅  Product schema cleaned"
+
+      - name: Clean — data only (truncate all tables)
+        if: inputs.scope == 'data-only'
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: |
           supabase db query --linked <<'SQL'
-          -- Truncate all app tables (order matters due to foreign keys)
+          -- Truncate product/commerce tables
+          TRUNCATE public.user_entitlements CASCADE;
+          TRUNCATE public.subscriptions CASCADE;
+          TRUNCATE public.orders CASCADE;
+          TRUNCATE public.coupons CASCADE;
+          TRUNCATE public.bundle_products CASCADE;
+          TRUNCATE public.bundles CASCADE;
+          TRUNCATE public.plan_products CASCADE;
+          TRUNCATE public.plans CASCADE;
+          TRUNCATE public.product_content CASCADE;
+          TRUNCATE public.products CASCADE;
+
+          -- Truncate user tables
           TRUNCATE public.audit_log CASCADE;
           TRUNCATE public.purchases CASCADE;
-          TRUNCATE public.subscriptions CASCADE;
           TRUNCATE public.user_identities CASCADE;
           TRUNCATE public.profiles CASCADE;
-          TRUNCATE public.products CASCADE;
           TRUNCATE public.schema_migrations CASCADE;
 
-          -- Delete all auth users (triggers will not fire since profiles are already truncated)
+          -- Delete auth users
           DELETE FROM auth.users;
           SQL
 
-          echo "DB data cleaned successfully."
+          echo "✅  All data truncated"
 
-      - name: Empty avatars storage bucket
+      - name: Empty storage buckets
+        env:
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          response=$(curl -s -o /dev/null -w "%{http_code}" \
-            -X POST \
-            "https://${{ secrets.SUPABASE_PROJECT_REF }}.supabase.co/storage/v1/bucket/avatars/empty" \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-            -H "Content-Type: application/json")
+          BASE="https://${SUPABASE_PROJECT_REF}.supabase.co/storage/v1"
+          for bucket in avatars free-content premium-content course-assets; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" \
+              -X POST "${BASE}/bucket/${bucket}/empty" \
+              -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+              -H "Content-Type: application/json")
+            if [ "$code" = "200" ]; then
+              echo "✅  Emptied bucket: $bucket"
+            else
+              echo "⏭️  Bucket $bucket: HTTP $code (may not exist)"
+            fi
+          done
 
-          if [ "$response" = "200" ] || [ "$response" = "404" ]; then
-            echo "Avatars bucket emptied successfully."
-          else
-            echo "Warning: Could not empty avatars bucket (HTTP $response). Bucket may not exist yet."
-          fi
+      - name: Summary
+        run: |
+          echo "## Database Cleanup" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| | |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| Scope | \`${{ inputs.scope }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Storage | Emptied |" >> $GITHUB_STEP_SUMMARY
+          echo "| Status | ✅ Complete |" >> $GITHUB_STEP_SUMMARY
 
   rejected:
     name: Confirmation Failed

@@ -5,12 +5,17 @@ import remarkGfm from "remark-gfm";
 import rehypeSlug from "rehype-slug";
 import CodeBlock from "./CodeBlock";
 
+/** Map of source filename (without .md) → route path, for rewriting relative links */
+export type LinkMap = Record<string, string>;
+
 interface MarkdownRendererProps {
   content: string;
   repo?: string;
+  /** Serializable link map for rewriting relative .md links (used by courses) */
+  linkMap?: LinkMap;
 }
 
-function buildComponents(repo?: string): Components {
+function buildComponents(repo?: string, linkMap?: LinkMap): Components {
   const basePath = typeof window === "undefined" ? (process.env.NEXT_PUBLIC_BASE_PATH ?? "") : (process.env.NEXT_PUBLIC_BASE_PATH ?? "");
 
   return {
@@ -54,13 +59,23 @@ function buildComponents(repo?: string): Components {
     a({ href, children }) {
       let resolvedHref = href ?? "";
 
-      // Rewrite relative .md links to docs route when repo is known
-      if (repo && resolvedHref && !resolvedHref.startsWith("http") && !resolvedHref.startsWith("#")) {
-        // e.g. "docs/ARCHITECTURE.md" → "/docs/Dotnetty/docs/ARCHITECTURE/"
-        const cleaned = resolvedHref
-          .replace(/^\.?\/?/, "") // strip leading ./ or /
-          .replace(/\.md$/, ""); // strip .md extension
-        resolvedHref = `${basePath}/docs/${repo}/${cleaned}/`;
+      if (resolvedHref && !resolvedHref.startsWith("http") && !resolvedHref.startsWith("#")) {
+        if (linkMap) {
+          // Course link rewriting: match filename against linkMap
+          const filename =
+            resolvedHref
+              .replace(/^[./]*/, "")
+              .split("/")
+              .pop()
+              ?.replace(/\.md$/, "") ?? "";
+          // Try exact match, then without numeric prefix (e.g. "07-ingress-and-dns" -> "ingress-and-dns")
+          const route = linkMap[filename] ?? linkMap[filename.replace(/^\d+-/, "")];
+          if (route) resolvedHref = route;
+        } else if (repo) {
+          // Fallback: rewrite relative .md links to docs route
+          const cleaned = resolvedHref.replace(/^\.?\/?/, "").replace(/\.md$/, "");
+          resolvedHref = `${basePath}/docs/${repo}/${cleaned}/`;
+        }
       }
 
       return (
@@ -88,8 +103,8 @@ function buildComponents(repo?: string): Components {
   };
 }
 
-export default function MarkdownRenderer({ content, repo }: MarkdownRendererProps) {
-  const components = buildComponents(repo);
+export default function MarkdownRenderer({ content, repo, linkMap }: MarkdownRendererProps) {
+  const components = buildComponents(repo, linkMap);
   return (
     <div className="prose-puffer">
       <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSlug]} components={components}>
