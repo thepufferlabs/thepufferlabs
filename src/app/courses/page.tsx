@@ -3,6 +3,8 @@ import { buildCourseInfo } from "@/lib/courses/content-loader";
 import CourseCatalog from "@/components/courses/CourseCatalog";
 import Link from "next/link";
 
+export const dynamic = "force-dynamic";
+
 export const metadata = {
   title: "Courses — The Puffer Labs",
   description: "Premium learning paths for software engineers. Deep-dive courses from beginner to Staff/Principal Engineer mastery.",

@@ -1,13 +1,9 @@
-import { discoverCourseRepos, getCourseBySlug } from "@/lib/courses/registry";
+import { getCourseBySlug } from "@/lib/courses/registry";
 import { fetchSidebar } from "@/lib/courses/content-loader";
-import { ensureCourseStaticParams, isStaticExportPlaceholderSlug } from "@/lib/courses/static-export";
 import CourseSidebar from "@/components/courses/CourseSidebar";
 import Link from "next/link";
 
-export async function generateStaticParams() {
-  const products = await discoverCourseRepos();
-  return ensureCourseStaticParams(products.map((p) => ({ slug: p.slug })));
-}
+export const dynamic = "force-dynamic";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -16,10 +12,6 @@ interface LayoutProps {
 
 export default async function CourseLayout({ children, params }: LayoutProps) {
   const { slug } = await params;
-  if (isStaticExportPlaceholderSlug(slug)) {
-    return <main className="flex-1 min-w-0">{children}</main>;
-  }
-
   const product = await getCourseBySlug(slug);
   const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 

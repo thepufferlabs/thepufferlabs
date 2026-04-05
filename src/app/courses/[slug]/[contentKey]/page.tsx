@@ -1,49 +1,10 @@
-import { discoverCourseRepos, getCourseBySlug } from "@/lib/courses/registry";
-import { fetchContentIndex, fetchSidebar, fetchMarkdownContent, getContentEntry, stripFrontmatter } from "@/lib/courses/content-loader";
-import { ensureCourseContentStaticParams, isStaticExportPlaceholderContent } from "@/lib/courses/static-export";
+import { getCourseBySlug } from "@/lib/courses/registry";
+import { fetchContentIndex, fetchMarkdownContent, getContentEntry, stripFrontmatter } from "@/lib/courses/content-loader";
 import MarkdownRenderer from "@/components/docs/MarkdownRenderer";
 import PremiumGate from "@/components/courses/PremiumGate";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 
-export async function generateStaticParams() {
-  const products = await discoverCourseRepos();
-  const params: { slug: string; contentKey: string }[] = [];
-
-  for (const product of products) {
-    const seen = new Set<string>();
-
-    try {
-      // Content index has free (and possibly premium) entries
-      const contentIndex = await fetchContentIndex(product.slug);
-      for (const item of contentIndex) {
-        if (item.isPublished !== false && !seen.has(item.contentKey)) {
-          seen.add(item.contentKey);
-          params.push({ slug: product.slug, contentKey: item.contentKey });
-        }
-      }
-    } catch (err) {
-      console.error(`Failed to fetch content index for ${product.slug}:`, err);
-    }
-
-    try {
-      // Sidebar may reference premium content keys not in product_content
-      const sidebar = await fetchSidebar(product.slug);
-      for (const section of sidebar.sections) {
-        for (const item of section.items) {
-          if (item.contentKey && !seen.has(item.contentKey)) {
-            seen.add(item.contentKey);
-            params.push({ slug: product.slug, contentKey: item.contentKey });
-          }
-        }
-      }
-    } catch (err) {
-      console.error(`Failed to fetch sidebar for ${product.slug}:`, err);
-    }
-  }
-
-  return ensureCourseContentStaticParams(params);
-}
+export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: Promise<{ slug: string; contentKey: string }>;
@@ -51,10 +12,6 @@ interface PageProps {
 
 export default async function ContentPage({ params }: PageProps) {
   const { slug, contentKey } = await params;
-  if (isStaticExportPlaceholderContent(slug, contentKey)) {
-    notFound();
-  }
-
   const product = await getCourseBySlug(slug);
   const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 

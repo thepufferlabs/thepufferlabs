@@ -1,13 +1,9 @@
-import { discoverCourseRepos, getCourseBySlug } from "@/lib/courses/registry";
+import { getCourseBySlug } from "@/lib/courses/registry";
 import { fetchToc, fetchContentIndex } from "@/lib/courses/content-loader";
-import { ensureCourseStaticParams, isStaticExportPlaceholderSlug } from "@/lib/courses/static-export";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 
-export async function generateStaticParams() {
-  const products = await discoverCourseRepos();
-  return ensureCourseStaticParams(products.map((p) => ({ slug: p.slug })));
-}
+export const dynamic = "force-dynamic";
+
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -15,10 +11,6 @@ interface PageProps {
 
 export default async function CourseOverviewPage({ params }: PageProps) {
   const { slug } = await params;
-  if (isStaticExportPlaceholderSlug(slug)) {
-    notFound();
-  }
-
   const product = await getCourseBySlug(slug);
   const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
