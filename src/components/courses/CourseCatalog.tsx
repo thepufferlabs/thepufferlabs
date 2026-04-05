@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useMemo, useRef, useCallback } from "react";
+import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import Link from "next/link";
-import type { CourseInfo } from "@/lib/courses/types";
+import type { CourseInfo, FlashSale } from "@/lib/courses/types";
+import type { Json } from "@/lib/database.types";
+import { supabase } from "@/lib/supabase";
 import CountdownTimer from "@/components/ui/CountdownTimer";
 
 interface CourseCatalogProps {
@@ -81,11 +83,61 @@ function formatPrice(cents: number, currency: string): string {
 
 const QUALIFIER_KEYS = ["category", "topic", "level", "status"] as const;
 
+function parseFlashSaleFromMeta(metadata: Json): FlashSale | null {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
+  const fs = (metadata as Record<string, Json>).flash_sale;
+  if (!fs || typeof fs !== "object" || Array.isArray(fs)) return null;
+  const sale = fs as Record<string, Json>;
+  if (!sale.is_active) return null;
+  if (new Date(sale.ends_at as string) <= new Date()) return null;
+  return {
+    salePriceCents: sale.sale_price_cents as number,
+    startsAt: sale.starts_at as string,
+    endsAt: sale.ends_at as string,
+    label: (sale.label as string) ?? "",
+    isActive: true,
+  };
+}
+
 export default function CourseCatalog({ courses, basePath }: CourseCatalogProps) {
   const [search, setSearch] = useState("");
   const [focused, setFocused] = useState(false);
   const [selectedIdx, setSelectedIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Fetch live pricing from Supabase (prices/flash sales are sensitive — never serve stale)
+  const [livePricing, setLivePricing] = useState<Record<string, { priceCents: number; currency: string; comparePriceCents: number | null; flashSale: FlashSale | null }>>({});
+
+  useEffect(() => {
+    async function fetchPricing() {
+      const { data } = await (supabase.from("products") as any)
+        .select("slug, price_cents, currency, compare_price_cents, metadata")
+        .eq("product_type", "course")
+        .eq("status", "published") as { data: { slug: string; price_cents: number; currency: string; compare_price_cents: number | null; metadata: Json }[] | null };
+      if (!data) return;
+      const map: typeof livePricing = {};
+      for (const row of data) {
+        map[row.slug] = {
+          priceCents: row.price_cents,
+          currency: row.currency,
+          comparePriceCents: row.compare_price_cents,
+          flashSale: parseFlashSaleFromMeta(row.metadata),
+        };
+      }
+      setLivePricing(map);
+    }
+    fetchPricing();
+  }, []);
+
+  // Merge live pricing into static course data
+  const liveCourses = useMemo(() => {
+    if (Object.keys(livePricing).length === 0) return courses;
+    return courses.map((c) => {
+      const live = livePricing[c.slug];
+      if (!live) return c;
+      return { ...c, priceCents: live.priceCents, currency: live.currency, comparePriceCents: live.comparePriceCents, flashSale: live.flashSale };
+    });
+  }, [courses, livePricing]);
 
   // Build value pools for autocomplete
   const valuePools = useMemo(() => {
@@ -93,7 +145,7 @@ export default function CourseCatalog({ courses, basePath }: CourseCatalogProps)
     const topics = new Set<string>();
     const levels = new Set<string>();
     const statuses = new Set<string>();
-    courses.forEach((c) => {
+    liveCourses.forEach((c) => {
       categories.add(c.category);
       c.tags.forEach((t) => topics.add(t));
       levels.add(c.level);
@@ -105,7 +157,7 @@ export default function CourseCatalog({ courses, basePath }: CourseCatalogProps)
       level: Array.from(levels).sort(),
       status: Array.from(statuses).sort(),
     };
-  }, [courses]);
+  }, [liveCourses]);
 
   // Parse GitHub-style qualifiers: "category:devops topic:k8s some text"
   const { qualifiers, freeText } = useMemo(() => {
@@ -121,7 +173,7 @@ export default function CourseCatalog({ courses, basePath }: CourseCatalogProps)
   }, [search]);
 
   const filtered = useMemo(() => {
-    return courses.filter((c) => {
+    return liveCourses.filter((c) => {
       if (
         freeText &&
         !(
@@ -140,7 +192,7 @@ export default function CourseCatalog({ courses, basePath }: CourseCatalogProps)
       }
       return true;
     });
-  }, [courses, freeText, qualifiers]);
+  }, [liveCourses, freeText, qualifiers]);
 
   // Build highlighted tokens from the search string
   const tokens = useMemo(() => {
