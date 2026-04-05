@@ -1,23 +1,28 @@
 -- =============================================================================
--- CLEANUP — Drops ALL schema + data across all domains
+-- CLEANUP: Feature Layers Only (SAFE)
 -- =============================================================================
--- Safe to run even if tables don't exist (fully idempotent).
--- Storage must be emptied via REST API BEFORE running this (done by workflow).
+-- Drops domains 2-5 (products, licensing, payments, courses).
+-- PRESERVES domain 1 (foundation): profiles, auth triggers, identities, audit.
+--
+-- Auth continues to work after running this. Users can still sign in.
+-- Re-run migrations 002-005 to recreate feature tables.
+--
+-- For a full nuclear reset, use 000_cleanup_nuclear.sql instead.
 -- =============================================================================
 
--- ─── DOMAIN 5: Online Courses ───────────────────────────
+-- ─── Domain 5: Online Courses ───────────────────────────
 
 DROP TABLE IF EXISTS user_bookmarks       CASCADE;
 DROP TABLE IF EXISTS user_course_progress CASCADE;
 DROP TABLE IF EXISTS course_details       CASCADE;
 
--- ─── DOMAIN 4: Payments ────────────────────────────────
+-- ─── Domain 4: Payments ─────────────────────────────────
 
 DROP TABLE IF EXISTS refunds              CASCADE;
 DROP TABLE IF EXISTS orders               CASCADE;
 DROP TABLE IF EXISTS coupons              CASCADE;
 
--- ─── DOMAIN 3: Licensing ───────────────────────────────
+-- ─── Domain 3: Licensing ────────────────────────────────
 
 DROP TABLE IF EXISTS user_entitlements    CASCADE;
 DROP TABLE IF EXISTS subscriptions        CASCADE;
@@ -26,27 +31,19 @@ DROP TABLE IF EXISTS bundles              CASCADE;
 DROP TABLE IF EXISTS plan_products        CASCADE;
 DROP TABLE IF EXISTS plans                CASCADE;
 
--- ─── DOMAIN 2: Product Catalog ─────────────────────────
+-- ─── Domain 2: Product Catalog ──────────────────────────
 
 DROP TABLE IF EXISTS product_content      CASCADE;
 DROP TABLE IF EXISTS products             CASCADE;
 
--- ─── DOMAIN 1: User & Auth ─────────────────────────────
-
-DROP TABLE IF EXISTS audit_log            CASCADE;
-DROP TABLE IF EXISTS user_identities      CASCADE;
-DROP TABLE IF EXISTS profiles             CASCADE;
-DROP TABLE IF EXISTS schema_migrations    CASCADE;
-
--- ─── Functions ─────────────────────────────────────────
+-- ─── Feature-layer functions ────────────────────────────
 
 DROP FUNCTION IF EXISTS on_order_paid()           CASCADE;
 DROP FUNCTION IF EXISTS on_subscription_change()  CASCADE;
-DROP FUNCTION IF EXISTS update_updated_at()       CASCADE;
 DROP FUNCTION IF EXISTS user_has_access(uuid, uuid)       CASCADE;
 DROP FUNCTION IF EXISTS user_can_read_content(uuid, uuid) CASCADE;
 
--- ─── Enums ─────────────────────────────────────────────
+-- ─── Feature-layer enums ────────────────────────────────
 
 DROP TYPE IF EXISTS product_type;
 DROP TYPE IF EXISTS product_status;
@@ -56,27 +53,34 @@ DROP TYPE IF EXISTS payment_status;
 DROP TYPE IF EXISTS subscription_status;
 DROP TYPE IF EXISTS subscription_interval;
 DROP TYPE IF EXISTS coupon_type;
-DROP TYPE IF EXISTS coupon_type;
 DROP TYPE IF EXISTS entitlement_source;
-DROP TYPE IF EXISTS user_role;
-DROP TYPE IF EXISTS user_status;
-DROP TYPE IF EXISTS identity_provider;
-DROP TYPE IF EXISTS audit_action;
 
--- ─── Storage Policies ──────────────────────────────────
+-- ─── Storage policies (not buckets — those are cleaned via REST API) ──
 
-DROP POLICY IF EXISTS "Free content is public"               ON storage.objects;
-DROP POLICY IF EXISTS "Course assets are public"             ON storage.objects;
-DROP POLICY IF EXISTS "Premium storage needs entitlement"    ON storage.objects;
-DROP POLICY IF EXISTS "Service writes free"                  ON storage.objects;
-DROP POLICY IF EXISTS "Service writes premium"               ON storage.objects;
-DROP POLICY IF EXISTS "Service writes assets"                ON storage.objects;
-DROP POLICY IF EXISTS "Service updates free"                 ON storage.objects;
-DROP POLICY IF EXISTS "Service updates premium"              ON storage.objects;
-DROP POLICY IF EXISTS "Service updates assets"               ON storage.objects;
-DROP POLICY IF EXISTS "Service deletes free"                 ON storage.objects;
-DROP POLICY IF EXISTS "Service deletes premium"              ON storage.objects;
-DROP POLICY IF EXISTS "Service deletes assets"               ON storage.objects;
+DROP POLICY IF EXISTS "Published products are public"          ON products;
+DROP POLICY IF EXISTS "Content: free public, premium needs entitlement" ON product_content;
+DROP POLICY IF EXISTS "Free content is public"                 ON storage.objects;
+DROP POLICY IF EXISTS "Course assets are public"               ON storage.objects;
+DROP POLICY IF EXISTS "Premium storage needs entitlement"      ON storage.objects;
+DROP POLICY IF EXISTS "Service writes free"                    ON storage.objects;
+DROP POLICY IF EXISTS "Service writes premium"                 ON storage.objects;
+DROP POLICY IF EXISTS "Service writes assets"                  ON storage.objects;
+DROP POLICY IF EXISTS "Service updates free"                   ON storage.objects;
+DROP POLICY IF EXISTS "Service updates premium"                ON storage.objects;
+DROP POLICY IF EXISTS "Service updates assets"                 ON storage.objects;
+DROP POLICY IF EXISTS "Service deletes free"                   ON storage.objects;
+DROP POLICY IF EXISTS "Service deletes premium"                ON storage.objects;
+DROP POLICY IF EXISTS "Service deletes assets"                 ON storage.objects;
 
--- Storage buckets are emptied & deleted via REST API in the workflow.
+-- Remove feature migration records (foundation stays)
+DELETE FROM schema_migrations WHERE version IN (
+  '20260405_002', '20260405_003', '20260405_004', '20260405_005'
+);
+
+-- =============================================================================
+-- PRESERVED (not touched):
+--   - profiles, user_identities, audit_log, schema_migrations
+--   - update_updated_at(), handle_new_user(), handle_user_login()
+--   - auth.users triggers (on_auth_user_created, on_auth_user_login)
+--   - user_role, user_status, identity_provider, audit_action enums
 -- =============================================================================

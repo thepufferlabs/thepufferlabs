@@ -3,25 +3,42 @@ name: Supabase Clean DB
 on:
   workflow_dispatch:
     inputs:
-      confirm:
-        description: 'Type "DELETE ALL DATA" to confirm'
-        required: true
-        type: string
       scope:
         description: 'What to clean'
         required: true
         type: choice
         options:
-          - data-only
-          - full-schema-and-data
-        default: data-only
+          - features-only
+          - features-and-data
+          - nuclear
+        default: features-only
+      confirm:
+        description: 'Type "DELETE" to confirm (or "NUCLEAR DELETE" for nuclear)'
+        required: true
+        type: string
 
 jobs:
   clean:
     name: Clean DB
     runs-on: ubuntu-latest
-    if: github.event.inputs.confirm == 'DELETE ALL DATA'
     steps:
+      - name: Validate confirmation
+        run: |
+          SCOPE="${{ inputs.scope }}"
+          CONFIRM="${{ inputs.confirm }}"
+
+          if [ "$SCOPE" = "nuclear" ] && [ "$CONFIRM" != "NUCLEAR DELETE" ]; then
+            echo "::error::Nuclear cleanup requires typing exactly: NUCLEAR DELETE"
+            exit 1
+          fi
+
+          if [ "$SCOPE" != "nuclear" ] && [ "$CONFIRM" != "DELETE" ]; then
+            echo "::error::Cleanup requires typing exactly: DELETE"
+            exit 1
+          fi
+
+          echo "Confirmed: $SCOPE cleanup"
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -35,104 +52,76 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
-      # Step 1: Empty storage buckets via REST API (must happen before SQL)
+      # Step 1: Empty storage buckets via REST API
       - name: Empty storage buckets
         env:
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           BASE="https://${SUPABASE_PROJECT_REF}.supabase.co/storage/v1"
-          for bucket in avatars free-content premium-content course-assets; do
+          for bucket in free-content premium-content course-assets avatars; do
             code=$(curl -s -o /dev/null -w "%{http_code}" \
               -X POST "${BASE}/bucket/${bucket}/empty" \
               -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
               -H "Content-Type: application/json")
-            if [ "$code" = "200" ]; then
-              echo "✅  Emptied: $bucket"
-            else
-              echo "⏭️  $bucket: HTTP $code (may not exist)"
-            fi
+            [ "$code" = "200" ] && echo "Emptied: $bucket" || echo "Skip: $bucket (HTTP $code)"
           done
 
-      # Step 2a: Full clean — delete buckets then drop all schema
-      - name: Delete storage buckets
-        if: inputs.scope == 'full-schema-and-data'
-        env:
-          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: |
-          BASE="https://${SUPABASE_PROJECT_REF}.supabase.co/storage/v1"
-          for bucket in free-content premium-content course-assets; do
-            code=$(curl -s -o /dev/null -w "%{http_code}" \
-              -X DELETE "${BASE}/bucket/${bucket}" \
-              -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}")
-            if [ "$code" = "200" ]; then
-              echo "✅  Deleted: $bucket"
-            else
-              echo "⏭️  $bucket: HTTP $code"
-            fi
-          done
-
-      - name: Drop all schema + data
-        if: inputs.scope == 'full-schema-and-data'
+      # Step 2a: features-only — drop product/commerce tables, keep auth intact
+      - name: "Clean: features-only (domains 2-5)"
+        if: inputs.scope == 'features-only'
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: |
-          echo "⚠️  Dropping ALL tables across all domains..."
+          echo "Dropping feature tables (products, licensing, payments, courses)..."
+          echo "Auth & profiles are PRESERVED."
           supabase db query --linked --file supabase/migrations/20260405_000_cleanup.sql
-          echo "✅  Full schema cleaned"
+          echo "Done. Re-run migrations 002-005 to rebuild."
 
-      # Step 2b: Data only — truncate all tables, keep schema
-      - name: Truncate all data
-        if: inputs.scope == 'data-only'
+      # Step 2b: features-and-data — drop feature tables + truncate user data
+      - name: "Clean: features + user data (domains 2-5 + truncate domain 1)"
+        if: inputs.scope == 'features-and-data'
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: |
-          supabase db query --linked <<'SQL'
-          DO $$
-          DECLARE
-            t TEXT;
-            tables TEXT[] := ARRAY[
-              -- Domain 5: Courses
-              'user_bookmarks',
-              'user_course_progress',
-              'course_details',
-              -- Domain 4: Payments
-              'refunds',
-              'orders',
-              'coupons',
-              -- Domain 3: Licensing
-              'user_entitlements',
-              'subscriptions',
-              'bundle_products',
-              'bundles',
-              'plan_products',
-              'plans',
-              -- Domain 2: Products
-              'product_content',
-              'products',
-              -- Domain 1: Users
-              'audit_log',
-              'user_identities',
-              'profiles',
-              'schema_migrations'
-            ];
-          BEGIN
-            FOREACH t IN ARRAY tables LOOP
-              IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = t) THEN
-                EXECUTE format('TRUNCATE public.%I CASCADE', t);
-                RAISE NOTICE 'Truncated: %', t;
-              END IF;
-            END LOOP;
-          END $$;
+          echo "Dropping feature tables..."
+          supabase db query --linked --file supabase/migrations/20260405_000_cleanup.sql
 
-          -- Delete auth users
+          echo "Truncating user data (keeping schema + auth triggers)..."
+          supabase db query --linked <<'SQL'
+          TRUNCATE audit_log CASCADE;
+          TRUNCATE user_identities CASCADE;
+          TRUNCATE profiles CASCADE;
           DELETE FROM auth.users;
           SQL
 
-          echo "✅  All data truncated (schema preserved)"
+          echo "Done. Auth schema intact, all data cleared. Re-run 002-005."
+
+      # Step 2c: nuclear — drop everything including foundation
+      - name: "Clean: NUCLEAR (all domains)"
+        if: inputs.scope == 'nuclear'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          echo "!! NUCLEAR: Deleting storage buckets..."
+          BASE="https://${SUPABASE_PROJECT_REF}.supabase.co/storage/v1"
+          for bucket in free-content premium-content course-assets; do
+            curl -s -o /dev/null -X DELETE "${BASE}/bucket/${bucket}" \
+              -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" || true
+          done
+
+          echo "!! NUCLEAR: Dropping ALL tables, functions, triggers, enums..."
+          supabase db query --linked --file supabase/migrations/20260405_000_cleanup_nuclear.sql
+
+          echo "!! NUCLEAR: Deleting all auth users..."
+          supabase db query --linked "DELETE FROM auth.users;"
+
+          echo "DONE. Everything is gone. Re-run ALL migrations (001-005)."
 
       - name: Summary
         run: |
@@ -141,16 +130,19 @@ jobs:
           echo "| | |" >> $GITHUB_STEP_SUMMARY
           echo "|---|---|" >> $GITHUB_STEP_SUMMARY
           echo "| Scope | \`${{ inputs.scope }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Storage | Emptied |" >> $GITHUB_STEP_SUMMARY
-          echo "| Status | ✅ Complete |" >> $GITHUB_STEP_SUMMARY
-
-  rejected:
-    name: Confirmation Failed
-    runs-on: ubuntu-latest
-    if: github.event.inputs.confirm != 'DELETE ALL DATA'
-    steps:
-      - name: Abort
-        run: |
-          echo "Confirmation text did not match. No data was deleted."
-          echo "You must type exactly: DELETE ALL DATA"
-          exit 1
+          if [ "${{ inputs.scope }}" = "features-only" ]; then
+            echo "| Auth | Preserved |" >> $GITHUB_STEP_SUMMARY
+            echo "| Users | Preserved |" >> $GITHUB_STEP_SUMMARY
+            echo "| Products | Dropped |" >> $GITHUB_STEP_SUMMARY
+            echo "| Next step | Re-run migrations 002-005 |" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ inputs.scope }}" = "features-and-data" ]; then
+            echo "| Auth | Schema preserved, data cleared |" >> $GITHUB_STEP_SUMMARY
+            echo "| Users | Deleted |" >> $GITHUB_STEP_SUMMARY
+            echo "| Products | Dropped |" >> $GITHUB_STEP_SUMMARY
+            echo "| Next step | Re-run migrations 002-005 |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Auth | DROPPED |" >> $GITHUB_STEP_SUMMARY
+            echo "| Users | DELETED |" >> $GITHUB_STEP_SUMMARY
+            echo "| Everything | GONE |" >> $GITHUB_STEP_SUMMARY
+            echo "| Next step | Re-run ALL migrations 001-005 |" >> $GITHUB_STEP_SUMMARY
+          fi
