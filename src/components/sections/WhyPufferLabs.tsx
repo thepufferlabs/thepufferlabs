@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { Float, Parallax, Reveal, StaggerGroup, StaggerItem } from "@/components/motion/Reveal";
 import SectionWrapper from "@/components/ui/SectionWrapper";
 import SectionHeading from "@/components/ui/SectionHeading";
 
@@ -27,7 +28,7 @@ export default function WhyPufferLabs() {
   return (
     <SectionWrapper id="why" className="relative">
       {/* Subtle divider gradient */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_50%,rgba(45,212,191,0.04)_0%,transparent_60%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_50%,rgba(34,197,94,0.08)_0%,transparent_58%)]" />
 
       <div className="relative">
         <SectionHeading
@@ -37,31 +38,37 @@ export default function WhyPufferLabs() {
         />
 
         {/* Centered mascot between heading and traits */}
-        <div className="flex justify-center mb-12">
-          <div className="relative">
-            <Image
-              src={`${basePath}/logos/the-puffer-labs-v.png`}
-              alt="The Puffer Labs pufferfish mascot"
-              width={250}
-              height={250}
-              className="object-contain drop-shadow-[0_0_50px_rgba(45,212,191,0.25)] max-w-[250px] h-auto"
-              loading="eager"
-              priority
-            />
-            <div className="absolute inset-0 -z-10 bg-teal/5 rounded-full blur-3xl" />
-          </div>
-        </div>
-
-        <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-          {traits.map((trait, i) => (
-            <div key={trait.label} className="group relative pl-8 border-l border-glass-border hover:border-teal/30 transition-colors">
-              <div className="absolute left-0 top-0 w-px h-0 bg-teal group-hover:h-full transition-all duration-500" />
-              <span className="text-xs font-mono text-teal/70 tracking-wider uppercase mb-2 block">0{i + 1}</span>
-              <h3 className="text-xl font-semibold text-text-primary mb-2">{trait.label}</h3>
-              <p className="text-sm text-text-muted leading-relaxed">{trait.description}</p>
+        <Reveal className="flex justify-center mb-12" y={18}>
+          <Parallax offset={28}>
+            <div className="relative">
+              <Float amplitude={14} duration={6.8} rotate={2.5}>
+                <Image
+                  src={`${basePath}/logos/the-puffer-labs-v.png`}
+                  alt="The Puffer Labs pufferfish mascot"
+                  width={250}
+                  height={250}
+                  className="object-contain drop-shadow-[0_0_60px_rgba(34,197,94,0.22)] max-w-[250px] h-auto"
+                  loading="eager"
+                  priority
+                />
+              </Float>
+              <div className="absolute inset-0 -z-10 bg-teal/5 rounded-full blur-3xl" />
             </div>
+          </Parallax>
+        </Reveal>
+
+        <StaggerGroup className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto" staggerChildren={0.11} amount={0.08}>
+          {traits.map((trait, i) => (
+            <StaggerItem key={trait.label} x={i % 2 === 0 ? -22 : 22} y={18}>
+              <div className="group relative pl-8 border-l border-glass-border hover:border-teal/30 transition-colors">
+                <div className="absolute left-0 top-0 w-px h-0 bg-teal group-hover:h-full transition-all duration-500" />
+                <span className="text-xs font-mono text-teal/70 tracking-wider uppercase mb-2 block">0{i + 1}</span>
+                <h3 className="text-xl font-semibold text-text-primary mb-2">{trait.label}</h3>
+                <p className="text-sm text-text-muted leading-relaxed">{trait.description}</p>
+              </div>
+            </StaggerItem>
           ))}
-        </div>
+        </StaggerGroup>
       </div>
     </SectionWrapper>
   );

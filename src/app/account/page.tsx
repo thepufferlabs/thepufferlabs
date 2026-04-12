@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { useTheme } from "@/components/ThemeProvider";
@@ -88,16 +89,18 @@ export default function AccountPage() {
   const loadPurchases = useCallback(async () => {
     if (!user) return;
     setPurchasesLoading(true);
-    const { data } = await (supabase.from("orders") as any).select("*").eq("user_id", user.id).order("created_at", { ascending: false }) as { data: OrderRow[] | null };
-    if (!data) { setOrders([]); setPurchasesLoading(false); return; }
+    const { data } = await supabase.from("orders").select("*").eq("user_id", user.id).order("created_at", { ascending: false });
+    if (!data) {
+      setOrders([]);
+      setPurchasesLoading(false);
+      return;
+    }
 
     // Fetch product titles for all orders with product_id
     const productIds = [...new Set(data.filter((o) => o.product_id).map((o) => o.product_id!))];
     let productMap: Record<string, string> = {};
     if (productIds.length > 0) {
-      const { data: products } = await (supabase.from("products") as any)
-        .select("id, title")
-        .in("id", productIds) as { data: { id: string; title: string }[] | null };
+      const { data: products } = await supabase.from("products").select("id, title").in("id", productIds);
       if (products) productMap = Object.fromEntries(products.map((p) => [p.id, p.title]));
     }
 
@@ -109,7 +112,7 @@ export default function AccountPage() {
     if (!user) return;
     setSubscriptionLoading(true);
     const { data } = await supabase.from("subscriptions").select("*").eq("user_id", user.id).order("created_at", { ascending: false }).limit(1);
-    setSubscription((data as Subscription[])?.[0] ?? null);
+    setSubscription(data?.[0] ?? null);
     setSubscriptionLoading(false);
   }, [user]);
 
@@ -214,7 +217,7 @@ export default function AccountPage() {
                   <div className="flex items-center gap-6">
                     <div className="relative">
                       {avatarUrl ? (
-                        <img src={avatarUrl} alt="Avatar" className="w-20 h-20 rounded-full object-cover" referrerPolicy="no-referrer" />
+                        <Image src={avatarUrl} alt="Avatar" width={80} height={80} className="w-20 h-20 rounded-full object-cover" referrerPolicy="no-referrer" unoptimized />
                       ) : (
                         <div className="w-20 h-20 rounded-full bg-teal/20 flex items-center justify-center text-teal text-xl font-bold">{(fullName || user.email || "U").charAt(0).toUpperCase()}</div>
                       )}
@@ -336,7 +339,10 @@ export default function AccountPage() {
                   <div className="space-y-3">
                     {orders.map((o) => {
                       const isExpanded = expandedOrder === o.id;
-                      const billing = (o.metadata && typeof o.metadata === "object" && !Array.isArray(o.metadata)) ? (o.metadata as Record<string, unknown>).billing as Record<string, string> | undefined : undefined;
+                      const billing =
+                        o.metadata && typeof o.metadata === "object" && !Array.isArray(o.metadata)
+                          ? ((o.metadata as Record<string, unknown>).billing as Record<string, string> | undefined)
+                          : undefined;
 
                       return (
                         <div key={o.id} className="rounded-xl border overflow-hidden" style={{ borderColor: "var(--theme-border)" }}>
@@ -363,11 +369,16 @@ export default function AccountPage() {
                             </div>
                             <div className="flex items-center gap-3 flex-shrink-0">
                               <span className="text-xs text-text-muted">{new Date(o.created_at).toLocaleDateString()}</span>
-                              <span className="text-sm font-semibold text-text-primary">
-                                {o.total_cents === 0 ? "Free" : `\u20B9${(o.total_cents / 100).toLocaleString("en-IN")}`}
-                              </span>
+                              <span className="text-sm font-semibold text-text-primary">{o.total_cents === 0 ? "Free" : `\u20B9${(o.total_cents / 100).toLocaleString("en-IN")}`}</span>
                               <svg
-                                width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                                width="14"
+                                height="14"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
                                 className={`text-text-dim transition-transform ${isExpanded ? "rotate-180" : ""}`}
                               >
                                 <polyline points="6 9 12 15 18 9" />
@@ -394,7 +405,9 @@ export default function AccountPage() {
                                 {o.discount_cents > 0 && (
                                   <div>
                                     <span className="text-text-dim uppercase tracking-wider text-[10px]">Discount</span>
-                                    <p className="mt-0.5" style={{ color: "var(--theme-success-text)" }}>-\u20B9{(o.discount_cents / 100).toLocaleString("en-IN")}</p>
+                                    <p className="mt-0.5" style={{ color: "var(--theme-success-text)" }}>
+                                      -\u20B9{(o.discount_cents / 100).toLocaleString("en-IN")}
+                                    </p>
                                   </div>
                                 )}
                                 <div>
@@ -427,13 +440,18 @@ export default function AccountPage() {
                                     {billing.street && (
                                       <div>
                                         <span className="text-text-dim uppercase tracking-wider text-[10px]">Address</span>
-                                        <p className="text-text-primary mt-0.5">{billing.street}, {billing.city}, {billing.state} {billing.pincode}</p>
+                                        <p className="text-text-primary mt-0.5">
+                                          {billing.street}, {billing.city}, {billing.state} {billing.pincode}
+                                        </p>
                                       </div>
                                     )}
                                     {billing.gstin && (
                                       <div>
                                         <span className="text-text-dim uppercase tracking-wider text-[10px]">GSTIN</span>
-                                        <p className="text-text-primary font-mono mt-0.5">{billing.gstin}{billing.businessName ? ` — ${billing.businessName}` : ""}</p>
+                                        <p className="text-text-primary font-mono mt-0.5">
+                                          {billing.gstin}
+                                          {billing.businessName ? ` — ${billing.businessName}` : ""}
+                                        </p>
                                       </div>
                                     )}
                                   </>

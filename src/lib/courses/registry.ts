@@ -73,11 +73,7 @@ function mapProductRow(row: ProductRow): CourseProduct {
  * Returns empty array if none exist — no fallback.
  */
 export async function discoverCourseRepos(): Promise<CourseProduct[]> {
-  const { data, error } = await (supabaseServer.from("products") as any)
-    .select("*")
-    .eq("product_type", "course")
-    .eq("status", "published")
-    .order("title") as { data: ProductRow[] | null; error: { message: string } | null };
+  const { data, error } = await supabaseServer.from("products").select("*").eq("product_type", "course").eq("status", "published").order("title");
 
   if (error) {
     console.error("[Courses] Failed to fetch courses from Supabase:", error.message);
@@ -92,12 +88,7 @@ export async function discoverCourseRepos(): Promise<CourseProduct[]> {
  * Returns null if not found.
  */
 export async function getCourseBySlug(slug: string): Promise<CourseProduct | null> {
-  const { data, error } = await (supabaseServer.from("products") as any)
-    .select("*")
-    .eq("slug", slug)
-    .eq("product_type", "course")
-    .eq("status", "published")
-    .single() as { data: ProductRow | null; error: unknown };
+  const { data, error } = await supabaseServer.from("products").select("*").eq("slug", slug).eq("product_type", "course").eq("status", "published").single();
 
   if (error || !data) return null;
 

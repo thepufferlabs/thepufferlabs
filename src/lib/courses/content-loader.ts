@@ -1,10 +1,6 @@
 import { supabaseServer } from "@/lib/supabase-server";
-import type { Database } from "@/lib/database.types";
 import type { CourseProduct } from "./registry";
 import type { CourseInfo, Sidebar, SidebarSection, Toc, TocPhase, TocItem, ContentEntry } from "./types";
-
-type CourseDetailsRow = Database["public"]["Tables"]["course_details"]["Row"];
-type ProductContentRow = Database["public"]["Tables"]["product_content"]["Row"];
 
 const SUPABASE_URL = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL!;
 
@@ -53,10 +49,7 @@ export async function fetchSidebar(slug: string): Promise<Sidebar> {
   const productId = await getProductId(slug);
   if (!productId) return { projectSlug: slug, sections: [] };
 
-  const { data, error } = await (supabaseServer.from("course_details") as any)
-    .select("sidebar_data, product_id")
-    .eq("product_id", productId)
-    .single() as { data: Pick<CourseDetailsRow, "sidebar_data" | "product_id"> | null; error: unknown };
+  const { data, error } = await supabaseServer.from("course_details").select("sidebar_data, product_id").eq("product_id", productId).single();
 
   if (error || !data) {
     return { projectSlug: slug, sections: [] };
@@ -89,10 +82,7 @@ export async function fetchToc(slug: string): Promise<Toc> {
   const productId = await getProductId(slug);
   if (!productId) return { projectSlug: slug, title: "", toc: [] };
 
-  const { data, error } = await (supabaseServer.from("course_details") as any)
-    .select("toc_data")
-    .eq("product_id", productId)
-    .single() as { data: Pick<CourseDetailsRow, "toc_data"> | null; error: unknown };
+  const { data, error } = await supabaseServer.from("course_details").select("toc_data").eq("product_id", productId).single();
 
   if (error || !data) {
     return { projectSlug: slug, title: "", toc: [] };
@@ -135,28 +125,26 @@ export async function fetchContentIndex(slug: string): Promise<ContentEntry[]> {
   const productId = await getProductId(slug);
   if (!productId) return [];
 
-  const { data, error } = await (supabaseServer.from("product_content") as any)
-    .select("*")
-    .eq("product_id", productId)
-    .eq("is_published", true)
-    .order("sort_order") as { data: ProductContentRow[] | null; error: unknown };
+  const { data, error } = await supabaseServer.from("product_content").select("*").eq("product_id", productId).eq("is_published", true).order("sort_order");
 
   if (error || !data) return [];
 
-  return data.map((row): ContentEntry => ({
-    contentKey: row.content_key,
-    title: row.title,
-    section: row.section ?? "",
-    accessLevel: row.access_level as "free" | "premium",
-    contentType: (row.content_type ?? "doc") as "doc" | "blog" | "code",
-    sourceType: "supabase-storage",
-    sourcePath: row.storage_path,
-    routePath: `/courses/${slug}/${row.content_key}`,
-    tags: row.tags ?? [],
-    order: row.sort_order,
-    isPublished: row.is_published,
-    migrationTargetPath: null,
-  }));
+  return data.map(
+    (row): ContentEntry => ({
+      contentKey: row.content_key,
+      title: row.title,
+      section: row.section ?? "",
+      accessLevel: row.access_level as "free" | "premium",
+      contentType: (row.content_type ?? "doc") as "doc" | "blog" | "code",
+      sourceType: "supabase-storage",
+      sourcePath: row.storage_path,
+      routePath: `/courses/${slug}/${row.content_key}`,
+      tags: row.tags ?? [],
+      order: row.sort_order,
+      isPublished: row.is_published,
+      migrationTargetPath: null,
+    })
+  );
 }
 
 // ── Markdown Content ────────────────────────────────────────
@@ -206,12 +194,7 @@ export function stripFrontmatter(markdown: string): string {
 
 /** Resolve a product slug to its UUID */
 async function getProductId(slug: string): Promise<string | null> {
-  const { data, error } = await (supabaseServer.from("products") as any)
-    .select("id")
-    .eq("slug", slug)
-    .eq("product_type", "course")
-    .eq("status", "published")
-    .single() as { data: { id: string } | null; error: unknown };
+  const { data, error } = await supabaseServer.from("products").select("id").eq("slug", slug).eq("product_type", "course").eq("status", "published").single();
 
   if (error || !data) return null;
   return data.id;

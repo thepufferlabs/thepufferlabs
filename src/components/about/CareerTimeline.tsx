@@ -162,7 +162,7 @@ function TimelineCard({ milestone, index }: { milestone: Milestone; index: numbe
       <div className="flex flex-col items-center shrink-0">
         <div
           className={`w-4 h-4 rounded-full border-2 transition-all duration-700 delay-200 ${visible ? "scale-100 opacity-100" : "scale-0 opacity-0"} ${
-            milestone.type === "current" ? "bg-teal border-teal shadow-[0_0_12px_rgba(45,212,191,0.5)]" : "bg-navy-light border-teal/40"
+            milestone.type === "current" ? "bg-teal border-teal shadow-[0_0_16px_rgba(34,197,94,0.4)]" : "bg-navy-light border-teal/35"
           }`}
         />
         {index < milestones.length - 1 && <div className={`w-px flex-1 transition-all duration-1000 delay-500 ${visible ? "bg-gradient-to-b from-teal/40 to-teal/10 opacity-100" : "opacity-0"}`} />}
@@ -176,7 +176,7 @@ function TimelineCard({ milestone, index }: { milestone: Milestone; index: numbe
         <div
           className={`rounded-2xl border p-6 transition-all duration-300 ${
             milestone.type === "current"
-              ? "border-teal/20 bg-gradient-to-br from-teal/[0.06] to-transparent shadow-[0_0_40px_rgba(45,212,191,0.06)]"
+              ? "border-teal/20 bg-gradient-to-br from-teal/[0.08] to-transparent shadow-[0_20px_50px_rgba(34,197,94,0.08)]"
               : "border-[var(--theme-border)] bg-[var(--theme-white-alpha-5)] hover:border-[var(--theme-white-alpha-10)] hover:bg-[var(--theme-white-alpha-5)]"
           }`}
         >

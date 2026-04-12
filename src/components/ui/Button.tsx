@@ -1,8 +1,11 @@
 import { type ButtonHTMLAttributes, type AnchorHTMLAttributes } from "react";
+import { cn } from "@/lib/cn";
+import { Slot } from "@/lib/radix-ui";
 
 type BaseProps = {
   variant?: "primary" | "secondary" | "ghost";
   size?: "sm" | "md" | "lg";
+  asChild?: boolean;
 };
 
 type ButtonAsButton = BaseProps & ButtonHTMLAttributes<HTMLButtonElement> & { href?: never };
@@ -12,19 +15,32 @@ type ButtonAsLink = BaseProps & AnchorHTMLAttributes<HTMLAnchorElement> & { href
 type ButtonProps = ButtonAsButton | ButtonAsLink;
 
 const variants = {
-  primary: "bg-teal text-btn-text font-semibold hover:bg-teal-dark shadow-[0_0_24px_rgba(45,212,191,0.25)] hover:shadow-[0_0_32px_rgba(45,212,191,0.4)] active:scale-[0.98]",
-  secondary: "border border-teal/30 text-teal hover:bg-teal/10 hover:border-teal/50 active:scale-[0.98]",
-  ghost: "text-text-muted hover:text-text-primary hover:bg-[var(--theme-white-alpha-5)] active:scale-[0.98]",
+  primary:
+    "border border-transparent bg-[var(--theme-primary)] text-[var(--theme-primary-foreground)] shadow-[var(--theme-soft-shadow)] hover:-translate-y-0.5 hover:brightness-[0.98] active:translate-y-0",
+  secondary:
+    "border border-[var(--theme-border-strong)] bg-[var(--theme-secondary)] text-text-primary shadow-[var(--theme-soft-shadow)] hover:-translate-y-0.5 hover:bg-[var(--theme-muted)] active:translate-y-0",
+  ghost: "border border-transparent text-text-muted hover:bg-[var(--theme-secondary)] hover:text-text-primary",
 } as const;
 
 const sizes = {
-  sm: "px-4 py-2 text-sm rounded-lg",
-  md: "px-6 py-3 text-sm rounded-xl",
-  lg: "px-8 py-4 text-base rounded-xl",
+  sm: "h-9 px-4 text-sm rounded-xl",
+  md: "h-11 px-5 text-sm rounded-xl",
+  lg: "h-[52px] px-6 text-base rounded-2xl",
 } as const;
 
 export default function Button({ variant = "primary", size = "md", className = "", ...props }: ButtonProps) {
-  const classes = `inline-flex items-center justify-center gap-2 font-medium transition-all duration-200 cursor-pointer ${variants[variant]} ${sizes[size]} ${className}`;
+  const classes = cn(
+    "group/button",
+    "inline-flex items-center justify-center gap-2 whitespace-nowrap font-medium tracking-[-0.02em] transition-all duration-200 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-navy)] disabled:pointer-events-none disabled:opacity-50",
+    variants[variant],
+    sizes[size],
+    className
+  );
+
+  if ("asChild" in props && props.asChild) {
+    const { asChild: _asChild, ...rest } = props as ButtonAsButton;
+    return <Slot className={classes} {...rest} />;
+  }
 
   if ("href" in props && props.href) {
     const { href, ...rest } = props as ButtonAsLink;

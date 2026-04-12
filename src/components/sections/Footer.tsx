@@ -1,61 +1,76 @@
+import Link from "next/link";
+import Badge from "@/components/ui/Badge";
+import Card, { CardContent } from "@/components/ui/Card";
 import PufferLogo from "@/components/ui/PufferLogo";
+import Separator from "@/components/ui/Separator";
 import { SITE, NAV_LINKS, SOCIAL_LINKS } from "@/lib/constants";
 
 export default function Footer() {
+  const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+
   return (
-    <footer className="border-t bg-navy transition-colors duration-300" style={{ borderColor: "var(--theme-border)" }} role="contentinfo">
+    <footer className="bg-transparent transition-colors duration-300" role="contentinfo">
       <div className="mx-auto max-w-7xl px-6 lg:px-8 py-16">
-        <div className="grid md:grid-cols-4 gap-12 md:gap-8">
-          {/* Brand */}
-          <div className="md:col-span-2">
-            <div className="flex items-center gap-2.5 mb-4">
-              <PufferLogo size={32} variant="navy" />
-              <span className="text-base font-bold tracking-tight text-text-primary">{SITE.name}</span>
+        <Card hover={false}>
+          <CardContent className="space-y-10">
+            <div className="grid gap-12 md:grid-cols-4 md:gap-8">
+              <div className="md:col-span-2">
+                <div className="mb-4 flex items-center gap-3">
+                  <div className="surface-panel-subtle flex h-11 w-11 items-center justify-center rounded-2xl">
+                    <PufferLogo size={44} variant="navy" />
+                  </div>
+                  <div>
+                    <p className="font-display text-lg font-semibold tracking-[-0.08em] text-text-primary">{SITE.name}</p>
+                    <Badge variant="outline" className="mt-2 px-2.5 py-0.5 text-[10px] tracking-[0.18em]">
+                      Built for engineers
+                    </Badge>
+                  </div>
+                </div>
+                <p className="max-w-sm text-sm leading-relaxed text-text-muted">{SITE.description}</p>
+              </div>
+
+              <div>
+                <h4 className="mb-4 text-[11px] font-medium uppercase tracking-[0.22em] text-text-dim">Navigate</h4>
+                <ul className="space-y-2.5">
+                  {NAV_LINKS.map((link) => (
+                    <li key={link.label}>
+                      <Link href={`${basePath}${link.href}`} className="text-sm text-text-muted transition-colors hover:text-text-primary">
+                        {link.label}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div>
+                <h4 className="mb-4 text-[11px] font-medium uppercase tracking-[0.22em] text-text-dim">Connect</h4>
+                <ul className="space-y-2.5">
+                  {SOCIAL_LINKS.map((link) => (
+                    <li key={link.label}>
+                      <a href={link.href} className="text-sm text-text-muted transition-colors hover:text-text-primary">
+                        {link.label}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
-            <p className="text-sm text-text-muted leading-relaxed max-w-sm">{SITE.description}</p>
-          </div>
 
-          {/* Links */}
-          <div>
-            <h4 className="text-xs font-semibold tracking-wider uppercase text-text-dim mb-4">Navigate</h4>
-            <ul className="space-y-2.5">
-              {NAV_LINKS.map((link) => (
-                <li key={link.label}>
-                  <a href={link.href} className="text-sm text-text-muted hover:text-text-primary transition-colors">
-                    {link.label}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
+            <Separator />
 
-          {/* Social */}
-          <div>
-            <h4 className="text-xs font-semibold tracking-wider uppercase text-text-dim mb-4">Connect</h4>
-            <ul className="space-y-2.5">
-              {SOCIAL_LINKS.map((link) => (
-                <li key={link.label}>
-                  <a href={link.href} className="text-sm text-text-muted hover:text-text-primary transition-colors">
-                    {link.label}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-
-        {/* Bottom bar */}
-        <div className="mt-16 pt-8 border-t flex flex-col sm:flex-row items-center justify-between gap-4" style={{ borderColor: "var(--theme-border)" }}>
-          <div>
-            <p className="text-xs text-text-dim">
-              &copy; {new Date().getFullYear()} {SITE.name}. All rights reserved.
-            </p>
-            <p className="text-[10px] text-text-dim/40 font-mono mt-1">
-              GSTIN: <span className="text-text-dim/60">Pending Registration</span>
-            </p>
-          </div>
-          <p className="text-xs text-text-dim font-mono">Built with depth. Shipped with care.</p>
-        </div>
+            <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
+              <div>
+                <p className="text-xs text-text-dim">
+                  &copy; {new Date().getFullYear()} {SITE.name}. All rights reserved.
+                </p>
+                <p className="mt-1 font-mono text-[10px] text-text-dim/60">
+                  GSTIN: <span className="text-text-dim/80">Pending Registration</span>
+                </p>
+              </div>
+              <p className="font-mono text-xs text-text-dim">Built with depth. Shipped with care.</p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </footer>
   );

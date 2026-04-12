@@ -42,42 +42,46 @@ export default function PremiumGate({ title, tags, slug, storagePath, contentKey
   const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
   useEffect(() => {
-    if (!user) {
-      setChecking(false);
-      setHasAccess(false);
-      return;
-    }
+    let cancelled = false;
 
     async function checkAndLoad() {
-      setChecking(true);
+      if (!user) {
+        if (!cancelled) {
+          setChecking(false);
+          setHasAccess(false);
+          setMarkdown(null);
+          setLoadingContent(false);
+        }
+        return;
+      }
+
+      if (!cancelled) {
+        setChecking(true);
+      }
 
       // 1. Get product_id from slug
       let productId: string | null = null;
       if (slug) {
-        const { data } = await (supabase.from("products") as any)
-          .select("id")
-          .eq("slug", slug)
-          .single() as { data: { id: string } | null };
+        const { data } = await supabase.from("products").select("id").eq("slug", slug).single();
         productId = data?.id ?? null;
       }
 
       if (!productId) {
-        setChecking(false);
-        setHasAccess(false);
+        if (!cancelled) {
+          setChecking(false);
+          setHasAccess(false);
+        }
         return;
       }
 
       // 2. Check entitlement
-      const { data: entitlement } = await (supabase.from("user_entitlements") as any)
-        .select("id")
-        .eq("user_id", user!.id)
-        .eq("product_id", productId)
-        .eq("is_active", true)
-        .limit(1) as { data: { id: string }[] | null };
+      const { data: entitlement } = await supabase.from("user_entitlements").select("id").eq("user_id", user.id).eq("product_id", productId).eq("is_active", true).limit(1);
 
       const entitled = !!(entitlement && entitlement.length > 0);
-      setHasAccess(entitled);
-      setChecking(false);
+      if (!cancelled) {
+        setHasAccess(entitled);
+        setChecking(false);
+      }
 
       if (!entitled) return;
 
@@ -87,24 +91,30 @@ export default function PremiumGate({ title, tags, slug, storagePath, contentKey
       let resolvedPath = storagePath;
 
       if (!resolvedPath && contentKey) {
-        const { data: contentRow } = await (supabase.from("product_content") as any)
-          .select("storage_path")
-          .eq("product_id", productId)
-          .eq("content_key", contentKey)
-          .single() as { data: { storage_path: string } | null };
+        const { data: contentRow } = await supabase.from("product_content").select("storage_path").eq("product_id", productId).eq("content_key", contentKey).single();
         resolvedPath = contentRow?.storage_path ?? undefined;
       }
 
       if (!resolvedPath) return;
 
       // 4. Fetch the markdown from storage
-      setLoadingContent(true);
+      if (!cancelled) {
+        setLoadingContent(true);
+      }
       const text = await fetchMarkdownFromStorage(resolvedPath);
-      if (text) setMarkdown(text);
-      setLoadingContent(false);
+      if (!cancelled && text) {
+        setMarkdown(text);
+      }
+      if (!cancelled) {
+        setLoadingContent(false);
+      }
     }
 
     checkAndLoad();
+
+    return () => {
+      cancelled = true;
+    };
   }, [user, slug, storagePath, contentKey]);
 
   // Loading
@@ -121,7 +131,10 @@ export default function PremiumGate({ title, tags, slug, storagePath, contentKey
     return (
       <div>
         <div className="flex items-center gap-2 mb-6">
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold" style={{ background: "var(--theme-success-bg)", color: "var(--theme-success-text)", border: "1px solid var(--theme-success-border)" }}>
+          <span
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold"
+            style={{ background: "var(--theme-success-bg)", color: "var(--theme-success-text)", border: "1px solid var(--theme-success-border)" }}
+          >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="20 6 9 17 4 12" />
             </svg>
@@ -147,7 +160,17 @@ export default function PremiumGate({ title, tags, slug, storagePath, contentKey
     return (
       <div className="max-w-2xl mx-auto py-20 px-6 text-center">
         <div className="w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-8" style={{ background: "var(--theme-success-bg)", border: "1px solid var(--theme-success-border)" }}>
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--theme-success-text)" }}>
+          <svg
+            width="36"
+            height="36"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{ color: "var(--theme-success-text)" }}
+          >
             <polyline points="20 6 9 17 4 12" />
           </svg>
         </div>
@@ -186,7 +209,7 @@ export default function PremiumGate({ title, tags, slug, storagePath, contentKey
       {slug && (
         <Link
           href={`${basePath}/courses/${slug}/`}
-          className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-navy font-semibold text-sm hover:from-amber-400 hover:to-amber-500 transition-all shadow-lg shadow-amber-500/20"
+          className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-btn-text font-semibold text-sm hover:from-amber-400 hover:to-amber-500 transition-all shadow-lg shadow-amber-500/20"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />

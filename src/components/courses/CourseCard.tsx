@@ -7,19 +7,19 @@ interface CourseCardProps {
 }
 
 const LEVEL_COLORS: Record<string, string> = {
-  beginner: "bg-green-500/10 text-green-400 border-green-500/20",
-  intermediate: "bg-blue-500/10 text-blue-400 border-blue-500/20",
-  advanced: "bg-purple-500/10 text-purple-400 border-purple-500/20",
+  beginner: "bg-teal/10 text-teal border-teal/20",
+  intermediate: "bg-teal/10 text-teal border-teal/20",
+  advanced: "bg-teal/10 text-teal border-teal/20",
   "beginner-to-advanced": "bg-teal/10 text-teal border-teal/20",
 };
 
 const CATEGORY_COLORS: Record<string, string> = {
-  devops: "bg-orange-500/10 text-orange-400 border-orange-500/20",
-  architecture: "bg-indigo-500/10 text-indigo-400 border-indigo-500/20",
-  backend: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-  frontend: "bg-cyan-500/10 text-cyan-400 border-cyan-500/20",
-  security: "bg-red-500/10 text-red-400 border-red-500/20",
-  data: "bg-violet-500/10 text-violet-400 border-violet-500/20",
+  devops: "bg-[var(--theme-white-alpha-5)] text-text-muted border-[var(--theme-border)]",
+  architecture: "bg-[var(--theme-white-alpha-5)] text-text-muted border-[var(--theme-border)]",
+  backend: "bg-[var(--theme-white-alpha-5)] text-text-muted border-[var(--theme-border)]",
+  frontend: "bg-[var(--theme-white-alpha-5)] text-text-muted border-[var(--theme-border)]",
+  security: "bg-[var(--theme-white-alpha-5)] text-text-muted border-[var(--theme-border)]",
+  data: "bg-[var(--theme-white-alpha-5)] text-text-muted border-[var(--theme-border)]",
 };
 
 function formatLevel(level: string): string {
@@ -38,10 +38,10 @@ export default function CourseCard({ meta, basePath }: CourseCardProps) {
   return (
     <Link
       href={`${basePath}/courses/${meta.slug}/`}
-      className="group rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-white-alpha-5)] hover:border-teal/30 hover:shadow-[0_0_40px_rgba(45,212,191,0.08)] transition-all duration-300 flex flex-col overflow-hidden"
+      className="group flex flex-col overflow-hidden rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-white-alpha-5)] transition-all duration-300 hover:border-teal/30 hover:shadow-[0_20px_50px_rgba(34,197,94,0.08)]"
     >
       {/* Header gradient */}
-      <div className="h-2 bg-gradient-to-r from-teal via-teal/60 to-lime/40" />
+      <div className="h-2 bg-gradient-to-r from-teal via-lime to-teal/60" />
 
       <div className="p-6 flex-1 flex flex-col">
         {/* Badges */}

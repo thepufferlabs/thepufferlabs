@@ -1,9 +1,9 @@
 import { getCourseBySlug } from "@/lib/courses/registry";
 import { fetchToc, fetchContentIndex } from "@/lib/courses/content-loader";
 import Link from "next/link";
+import CourseOverviewContent from "@/components/courses/CourseOverviewContent";
 
 export const dynamic = "force-dynamic";
-
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -74,7 +74,7 @@ export default async function CourseOverviewPage({ params }: PageProps) {
         {firstFreeKey && (
           <Link
             href={`${basePath}/courses/${slug}/${firstFreeKey}/`}
-            className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-teal text-navy font-semibold text-sm hover:bg-teal/90 transition-colors shadow-lg shadow-teal/20"
+            className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-teal text-btn-text font-semibold text-sm hover:bg-teal/90 transition-colors shadow-lg shadow-teal/20"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polygon points="5 3 19 12 5 21 5 3" />
@@ -88,64 +88,7 @@ export default async function CourseOverviewPage({ params }: PageProps) {
       <div>
         <h2 className="text-lg font-bold text-text-primary mb-6">Learning Path</h2>
 
-        <div className="space-y-6">
-          {toc.toc.map((phase, phaseIndex) => {
-            const hasPremium = phase.items.some((i) => i.accessLevel === "premium");
-
-            return (
-              <div key={phase.phase} className="rounded-xl border border-[var(--theme-border)] bg-[var(--theme-white-alpha-5)] overflow-hidden">
-                {/* Phase header */}
-                <div className="px-5 py-4 border-b border-[var(--theme-border)] flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <span className="w-8 h-8 rounded-lg bg-teal/10 text-teal flex items-center justify-center text-sm font-bold">{phaseIndex + 1}</span>
-                    <div>
-                      <h3 className="text-sm font-semibold text-text-primary">{phase.phase}</h3>
-                      <p className="text-xs text-text-dim">{phase.description}</p>
-                    </div>
-                  </div>
-                  {hasPremium && <span className="px-2 py-0.5 rounded text-[9px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">Premium</span>}
-                </div>
-
-                {/* Items */}
-                <ul className="divide-y divide-[var(--theme-border)]">
-                  {phase.items.map((item) => (
-                    <li key={item.contentKey}>
-                      <Link href={`${basePath}/courses/${slug}/${item.contentKey}/`} className="flex items-center justify-between px-5 py-3 hover:bg-[var(--theme-white-alpha-5)] transition-colors">
-                        <span className="flex items-center gap-3">
-                          {item.accessLevel === "free" ? (
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-400">
-                              <path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z" />
-                              <path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z" />
-                            </svg>
-                          ) : (
-                            <svg
-                              width="14"
-                              height="14"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              className="text-amber-400/60"
-                            >
-                              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                              <path d="M7 11V7a5 5 0 0110 0v4" />
-                            </svg>
-                          )}
-                          <span className="text-sm text-text-muted">{item.title}</span>
-                        </span>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-text-dim">
-                          <polyline points="9 18 15 12 9 6" />
-                        </svg>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            );
-          })}
-        </div>
+        <CourseOverviewContent slug={slug} phases={toc.toc} />
       </div>
     </div>
   );

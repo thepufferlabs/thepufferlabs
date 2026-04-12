@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, useMemo, type ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useMemo, useRef, type ReactNode } from "react";
 
 export interface CartItem {
   productId: string;
@@ -49,24 +49,42 @@ export function getEffectivePrice(item: CartItem): number {
 
 export default function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
-  const [mounted, setMounted] = useState(false);
+  const hydratedRef = useRef(false);
 
   // Load from localStorage on mount
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) setItems(JSON.parse(stored));
-    } catch {
-      // Ignore corrupt data
+    let cancelled = false;
+
+    async function hydrateCart() {
+      let nextItems: CartItem[] = [];
+
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) nextItems = JSON.parse(stored) as CartItem[];
+      } catch {
+        // Ignore corrupt data
+      }
+
+      await Promise.resolve();
+      hydratedRef.current = true;
+
+      if (!cancelled) {
+        setItems(nextItems);
+      }
     }
-    setMounted(true);
+
+    void hydrateCart();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Persist to localStorage on change (after initial mount)
   useEffect(() => {
-    if (!mounted) return;
+    if (!hydratedRef.current) return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-  }, [items, mounted]);
+  }, [items]);
 
   function addItem(item: CartItem) {
     setItems((prev) => {

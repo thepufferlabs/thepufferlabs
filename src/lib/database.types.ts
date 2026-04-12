@@ -350,6 +350,37 @@ export interface Database {
           note?: string | null;
         };
       };
+      user_entitlements: {
+        Row: {
+          id: string;
+          user_id: string;
+          product_id: string;
+          source: EntitlementSource;
+          source_id: string | null;
+          granted_at: string;
+          expires_at: string | null;
+          is_active: boolean;
+          metadata: Json;
+        };
+        Insert: {
+          user_id: string;
+          product_id: string;
+          source: EntitlementSource;
+          source_id?: string | null;
+          granted_at?: string;
+          expires_at?: string | null;
+          is_active?: boolean;
+          metadata?: Json;
+        };
+        Update: {
+          source?: EntitlementSource;
+          source_id?: string | null;
+          granted_at?: string;
+          expires_at?: string | null;
+          is_active?: boolean;
+          metadata?: Json;
+        };
+      };
       coupons: {
         Row: {
           id: string;

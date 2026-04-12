@@ -49,7 +49,7 @@ interface SkillCategory {
 const categories: SkillCategory[] = [
   {
     label: "Languages",
-    color: "text-violet-400",
+    color: "text-teal",
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <polyline points="16 18 22 12 16 6" />
@@ -67,7 +67,7 @@ const categories: SkillCategory[] = [
   },
   {
     label: "Frontend",
-    color: "text-sky-400",
+    color: "text-teal",
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <rect x="2" y="3" width="20" height="14" rx="2" />
@@ -85,7 +85,7 @@ const categories: SkillCategory[] = [
   },
   {
     label: "Backend",
-    color: "text-emerald-400",
+    color: "text-teal",
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <rect x="2" y="2" width="20" height="8" rx="2" />
@@ -104,7 +104,7 @@ const categories: SkillCategory[] = [
   },
   {
     label: "Cloud & Infra",
-    color: "text-blue-400",
+    color: "text-lime-dark",
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z" />
@@ -121,7 +121,7 @@ const categories: SkillCategory[] = [
   },
   {
     label: "Data & Messaging",
-    color: "text-amber-400",
+    color: "text-teal",
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <ellipse cx="12" cy="5" rx="9" ry="3" />
@@ -140,7 +140,7 @@ const categories: SkillCategory[] = [
   },
   {
     label: "DevOps & Testing",
-    color: "text-orange-400",
+    color: "text-lime-dark",
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
@@ -158,7 +158,7 @@ const categories: SkillCategory[] = [
   },
   {
     label: "Architecture",
-    color: "text-rose-400",
+    color: "text-teal",
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="12" r="3" />
@@ -213,7 +213,7 @@ export default function SkillsGrid() {
       {categories.map((cat, i) => (
         <div
           key={cat.label}
-          className={`group/card rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-white-alpha-5)] p-5 transition-all duration-700 hover:border-teal/20 hover:shadow-[0_0_30px_rgba(45,212,191,0.05)] ${
+          className={`group/card rounded-2xl border border-[var(--theme-border)] bg-[var(--theme-white-alpha-5)] p-5 transition-all duration-700 hover:border-teal/20 hover:shadow-[0_20px_50px_rgba(34,197,94,0.08)] ${
             visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
           }`}
           style={{ transitionDelay: `${i * 80}ms` }}

@@ -8,6 +8,7 @@ import { useCart, type CartItem } from "@/components/CartProvider";
 import { supabase } from "@/lib/supabase";
 import { showToast } from "@/components/ui/Toast";
 import { PAYMENT_CONFIG } from "@/lib/constants";
+import type { Database } from "@/lib/database.types";
 
 function formatPrice(cents: number, currency: string): string {
   const amount = cents / 100;
@@ -25,6 +26,19 @@ interface CheckoutSession {
   couponCode: string;
   totalCents: number;
   currency: string;
+}
+
+type OrderInsert = Database["public"]["Tables"]["orders"]["Insert"];
+
+function getStoredCheckoutSession(): CheckoutSession | null {
+  try {
+    const stored = localStorage.getItem("checkout_session");
+    if (!stored) return null;
+    const parsed = JSON.parse(stored) as CheckoutSession;
+    return parsed.items && parsed.items.length > 0 ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
 type Step = "contact" | "address" | "business" | "payment";
@@ -76,8 +90,7 @@ const STEPS: { key: Step; label: string; number: number; icon: React.ReactNode }
   },
 ];
 
-const inputClass =
-  "w-full rounded-lg border bg-navy-light px-4 py-3 text-sm text-text-primary placeholder:text-text-dim outline-none focus:border-teal/50 transition-colors";
+const inputClass = "w-full rounded-lg border bg-navy-light px-4 py-3 text-sm text-text-primary placeholder:text-text-dim outline-none focus:border-teal/50 transition-colors";
 
 export default function BillingPage() {
   const router = useRouter();
@@ -85,7 +98,6 @@ export default function BillingPage() {
   const { user } = useAuth();
   const { clearCart } = useCart();
   const [session, setSession] = useState<CheckoutSession | null>(null);
-  const [mounted, setMounted] = useState(false);
   const [activeStep, setActiveStep] = useState<Step>("contact");
   const [paying, setPaying] = useState(false);
 
@@ -103,36 +115,52 @@ export default function BillingPage() {
   });
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem("checkout_session");
-      if (stored) {
-        const parsed = JSON.parse(stored) as CheckoutSession;
-        if (parsed.items && parsed.items.length > 0) {
-          setSession(parsed);
-        } else {
-          router.replace(`${basePath}/cart/`);
-          return;
-        }
-      } else {
+    let cancelled = false;
+
+    async function hydrateSession() {
+      const parsed = getStoredCheckoutSession();
+      if (!parsed) {
         router.replace(`${basePath}/cart/`);
         return;
       }
-    } catch {
-      router.replace(`${basePath}/cart/`);
-      return;
+
+      await Promise.resolve();
+      if (!cancelled) {
+        setSession(parsed);
+      }
     }
 
-    if (user) {
+    void hydrateSession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [router, basePath]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function hydrateContactDetails() {
+      if (!user) return;
+
       const meta = user.user_metadata ?? {};
-      setForm((prev) => ({
-        ...prev,
-        fullName: meta.full_name || meta.name || prev.fullName,
-        email: user.email || prev.email,
-      }));
+      await Promise.resolve();
+
+      if (!cancelled) {
+        setForm((prev) => ({
+          ...prev,
+          fullName: meta.full_name || meta.name || prev.fullName,
+          email: user.email || prev.email,
+        }));
+      }
     }
 
-    setMounted(true);
-  }, [user, router, basePath]);
+    void hydrateContactDetails();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   function updateForm(field: string, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -163,15 +191,17 @@ export default function BillingPage() {
     try {
       // Create an order for each item
       for (const item of session.items) {
-        const orderPayload = {
+        const effectiveItemTotal = item.salePriceCents != null && item.saleEndsAt && new Date(item.saleEndsAt) > new Date() ? item.salePriceCents : item.priceCents;
+
+        const orderPayload: OrderInsert = {
           user_id: user.id,
           status: "paid",
           product_id: item.productId,
           coupon_id: session.couponId || null,
-          subtotal_cents: item.salePriceCents != null && item.saleEndsAt && new Date(item.saleEndsAt) > new Date() ? item.salePriceCents : item.priceCents,
+          subtotal_cents: effectiveItemTotal,
           discount_cents: session.items.length === 1 ? session.discountCents : 0,
           tax_cents: 0,
-          total_cents: session.items.length === 1 ? session.totalCents : (item.salePriceCents != null && item.saleEndsAt && new Date(item.saleEndsAt) > new Date() ? item.salePriceCents : item.priceCents),
+          total_cents: session.items.length === 1 ? session.totalCents : effectiveItemTotal,
           currency: item.currency,
           provider: "coupon" as const,
           notes: `Billing: ${form.fullName}, ${form.email}, ${form.phone}. Address: ${form.street}, ${form.city}, ${form.state} ${form.pincode}, ${form.country}.${form.gstin ? ` GSTIN: ${form.gstin}, Business: ${form.businessName}` : ""}`,
@@ -191,7 +221,7 @@ export default function BillingPage() {
           },
         };
 
-        const { error } = await (supabase.from("orders") as any).insert(orderPayload);
+        const { error } = await supabase.from("orders").insert(orderPayload);
         if (error) {
           showToast(`Order failed: ${error.message}`, "error");
           setPaying(false);
@@ -205,13 +235,13 @@ export default function BillingPage() {
 
       showToast("Purchase complete! Premium content is now unlocked.", "success");
       router.push(`${basePath}/account/`);
-    } catch (err) {
+    } catch {
       showToast("Something went wrong. Please try again.", "error");
       setPaying(false);
     }
   }
 
-  if (!mounted || !session) {
+  if (!session) {
     return (
       <div className="min-h-screen bg-navy pt-24 flex items-center justify-center">
         <div className="animate-pulse text-text-dim text-sm">Loading...</div>
@@ -224,7 +254,9 @@ export default function BillingPage() {
       <div className="max-w-5xl mx-auto px-6">
         {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-xs text-text-dim font-mono mb-6">
-          <Link href={`${basePath}/cart/`} className="hover:text-teal transition-colors">Cart</Link>
+          <Link href={`${basePath}/cart/`} className="hover:text-teal transition-colors">
+            Cart
+          </Link>
           <span>/</span>
           <span className="text-teal">Billing</span>
         </div>
@@ -251,10 +283,7 @@ export default function BillingPage() {
                   }}
                 >
                   {/* Accordion header */}
-                  <button
-                    onClick={() => setActiveStep(step.key)}
-                    className="w-full flex items-center gap-3 px-5 py-4 text-left cursor-pointer transition-colors hover:bg-[var(--theme-white-alpha-5)]"
-                  >
+                  <button onClick={() => setActiveStep(step.key)} className="w-full flex items-center gap-3 px-5 py-4 text-left cursor-pointer transition-colors hover:bg-[var(--theme-white-alpha-5)]">
                     <span
                       className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 transition-colors"
                       style={{
@@ -270,12 +299,17 @@ export default function BillingPage() {
                         step.number
                       )}
                     </span>
-                    <span className={`text-sm font-semibold flex-1 ${isOpen ? "text-text-primary" : "text-text-muted"}`}>
-                      {step.label}
-                    </span>
+                    <span className={`text-sm font-semibold flex-1 ${isOpen ? "text-text-primary" : "text-text-muted"}`}>{step.label}</span>
                     {step.key === "business" && <span className="text-[10px] text-text-dim">Optional</span>}
                     <svg
-                      width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
                       className={`text-text-dim transition-transform ${isOpen ? "rotate-180" : ""}`}
                     >
                       <polyline points="6 9 12 15 18 9" />
@@ -289,20 +323,45 @@ export default function BillingPage() {
                         <div className="grid gap-4">
                           <div>
                             <label className="text-[11px] text-text-dim uppercase tracking-wider font-medium mb-1.5 block">Full Name *</label>
-                            <input type="text" value={form.fullName} onChange={(e) => updateForm("fullName", e.target.value)} placeholder="Santosh Kumar" className={inputClass} style={{ borderColor: "var(--theme-border)" }} />
+                            <input
+                              type="text"
+                              value={form.fullName}
+                              onChange={(e) => updateForm("fullName", e.target.value)}
+                              placeholder="Santosh Kumar"
+                              className={inputClass}
+                              style={{ borderColor: "var(--theme-border)" }}
+                            />
                           </div>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
                               <label className="text-[11px] text-text-dim uppercase tracking-wider font-medium mb-1.5 block">Email *</label>
-                              <input type="email" value={form.email} onChange={(e) => updateForm("email", e.target.value)} placeholder="you@example.com" className={inputClass} style={{ borderColor: "var(--theme-border)" }} />
+                              <input
+                                type="email"
+                                value={form.email}
+                                onChange={(e) => updateForm("email", e.target.value)}
+                                placeholder="you@example.com"
+                                className={inputClass}
+                                style={{ borderColor: "var(--theme-border)" }}
+                              />
                             </div>
                             <div>
                               <label className="text-[11px] text-text-dim uppercase tracking-wider font-medium mb-1.5 block">Phone *</label>
-                              <input type="tel" value={form.phone} onChange={(e) => updateForm("phone", e.target.value)} placeholder="+91 9876543210" className={inputClass} style={{ borderColor: "var(--theme-border)" }} />
+                              <input
+                                type="tel"
+                                value={form.phone}
+                                onChange={(e) => updateForm("phone", e.target.value)}
+                                placeholder="+91 9876543210"
+                                className={inputClass}
+                                style={{ borderColor: "var(--theme-border)" }}
+                              />
                             </div>
                           </div>
                           <div className="flex justify-end pt-2">
-                            <button onClick={() => nextStep("contact")} disabled={!isStepComplete("contact")} className="px-5 py-2 text-xs font-semibold rounded-lg bg-teal text-btn-text hover:bg-teal-dark transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
+                            <button
+                              onClick={() => nextStep("contact")}
+                              disabled={!isStepComplete("contact")}
+                              className="px-5 py-2 text-xs font-semibold rounded-lg bg-teal text-btn-text hover:bg-teal-dark transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
                               Continue
                             </button>
                           </div>
@@ -313,22 +372,50 @@ export default function BillingPage() {
                         <div className="grid gap-4">
                           <div>
                             <label className="text-[11px] text-text-dim uppercase tracking-wider font-medium mb-1.5 block">Street Address *</label>
-                            <input type="text" value={form.street} onChange={(e) => updateForm("street", e.target.value)} placeholder="123 Main Street, Apt 4" className={inputClass} style={{ borderColor: "var(--theme-border)" }} />
+                            <input
+                              type="text"
+                              value={form.street}
+                              onChange={(e) => updateForm("street", e.target.value)}
+                              placeholder="123 Main Street, Apt 4"
+                              className={inputClass}
+                              style={{ borderColor: "var(--theme-border)" }}
+                            />
                           </div>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
                               <label className="text-[11px] text-text-dim uppercase tracking-wider font-medium mb-1.5 block">City *</label>
-                              <input type="text" value={form.city} onChange={(e) => updateForm("city", e.target.value)} placeholder="Bengaluru" className={inputClass} style={{ borderColor: "var(--theme-border)" }} />
+                              <input
+                                type="text"
+                                value={form.city}
+                                onChange={(e) => updateForm("city", e.target.value)}
+                                placeholder="Bengaluru"
+                                className={inputClass}
+                                style={{ borderColor: "var(--theme-border)" }}
+                              />
                             </div>
                             <div>
                               <label className="text-[11px] text-text-dim uppercase tracking-wider font-medium mb-1.5 block">State *</label>
-                              <input type="text" value={form.state} onChange={(e) => updateForm("state", e.target.value)} placeholder="Karnataka" className={inputClass} style={{ borderColor: "var(--theme-border)" }} />
+                              <input
+                                type="text"
+                                value={form.state}
+                                onChange={(e) => updateForm("state", e.target.value)}
+                                placeholder="Karnataka"
+                                className={inputClass}
+                                style={{ borderColor: "var(--theme-border)" }}
+                              />
                             </div>
                           </div>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
                               <label className="text-[11px] text-text-dim uppercase tracking-wider font-medium mb-1.5 block">Pincode *</label>
-                              <input type="text" value={form.pincode} onChange={(e) => updateForm("pincode", e.target.value)} placeholder="560001" className={inputClass} style={{ borderColor: "var(--theme-border)" }} />
+                              <input
+                                type="text"
+                                value={form.pincode}
+                                onChange={(e) => updateForm("pincode", e.target.value)}
+                                placeholder="560001"
+                                className={inputClass}
+                                style={{ borderColor: "var(--theme-border)" }}
+                              />
                             </div>
                             <div>
                               <label className="text-[11px] text-text-dim uppercase tracking-wider font-medium mb-1.5 block">Country *</label>
@@ -336,7 +423,11 @@ export default function BillingPage() {
                             </div>
                           </div>
                           <div className="flex justify-end pt-2">
-                            <button onClick={() => nextStep("address")} disabled={!isStepComplete("address")} className="px-5 py-2 text-xs font-semibold rounded-lg bg-teal text-btn-text hover:bg-teal-dark transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed">
+                            <button
+                              onClick={() => nextStep("address")}
+                              disabled={!isStepComplete("address")}
+                              className="px-5 py-2 text-xs font-semibold rounded-lg bg-teal text-btn-text hover:bg-teal-dark transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
                               Continue
                             </button>
                           </div>
@@ -349,15 +440,33 @@ export default function BillingPage() {
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
                               <label className="text-[11px] text-text-dim uppercase tracking-wider font-medium mb-1.5 block">GSTIN Number</label>
-                              <input type="text" value={form.gstin} onChange={(e) => updateForm("gstin", e.target.value.toUpperCase())} placeholder="22AAAAA0000A1Z5" maxLength={15} className={`${inputClass} font-mono tracking-wider`} style={{ borderColor: "var(--theme-border)" }} />
+                              <input
+                                type="text"
+                                value={form.gstin}
+                                onChange={(e) => updateForm("gstin", e.target.value.toUpperCase())}
+                                placeholder="22AAAAA0000A1Z5"
+                                maxLength={15}
+                                className={`${inputClass} font-mono tracking-wider`}
+                                style={{ borderColor: "var(--theme-border)" }}
+                              />
                             </div>
                             <div>
                               <label className="text-[11px] text-text-dim uppercase tracking-wider font-medium mb-1.5 block">Business Name</label>
-                              <input type="text" value={form.businessName} onChange={(e) => updateForm("businessName", e.target.value)} placeholder="Acme Pvt Ltd" className={inputClass} style={{ borderColor: "var(--theme-border)" }} />
+                              <input
+                                type="text"
+                                value={form.businessName}
+                                onChange={(e) => updateForm("businessName", e.target.value)}
+                                placeholder="Acme Pvt Ltd"
+                                className={inputClass}
+                                style={{ borderColor: "var(--theme-border)" }}
+                              />
                             </div>
                           </div>
                           <div className="flex justify-end pt-2">
-                            <button onClick={() => nextStep("business")} className="px-5 py-2 text-xs font-semibold rounded-lg bg-teal text-btn-text hover:bg-teal-dark transition-colors cursor-pointer">
+                            <button
+                              onClick={() => nextStep("business")}
+                              className="px-5 py-2 text-xs font-semibold rounded-lg bg-teal text-btn-text hover:bg-teal-dark transition-colors cursor-pointer"
+                            >
                               Continue to Payment
                             </button>
                           </div>
@@ -370,7 +479,9 @@ export default function BillingPage() {
 
                           {PAYMENT_CONFIG.enabled === "razorpay" && (
                             <button
-                              onClick={() => {/* TODO: Razorpay checkout integration */}}
+                              onClick={() => {
+                                /* TODO: Razorpay checkout integration */
+                              }}
                               className="w-full px-6 py-3.5 rounded-xl text-white font-semibold text-sm flex items-center justify-center gap-3 cursor-pointer hover:opacity-90 transition-opacity"
                               style={{ background: "#2B84EA" }}
                             >
@@ -383,7 +494,9 @@ export default function BillingPage() {
 
                           {PAYMENT_CONFIG.enabled === "stripe" && (
                             <button
-                              onClick={() => {/* TODO: Stripe checkout integration */}}
+                              onClick={() => {
+                                /* TODO: Stripe checkout integration */
+                              }}
                               className="w-full px-6 py-3.5 rounded-xl text-white font-semibold text-sm flex items-center justify-center gap-3 cursor-pointer hover:opacity-90 transition-opacity"
                               style={{ background: "#635BFF" }}
                             >
@@ -427,9 +540,7 @@ export default function BillingPage() {
                               </>
                             )}
                           </button>
-                          <p className="text-[11px] text-text-dim text-center">
-                            {session.totalCents === 0 ? "This order is free — no payment required." : "Access will be granted instantly."}
-                          </p>
+                          <p className="text-[11px] text-text-dim text-center">{session.totalCents === 0 ? "This order is free — no payment required." : "Access will be granted instantly."}</p>
                         </div>
                       )}
                     </div>
@@ -452,10 +563,7 @@ export default function BillingPage() {
                       <p className="text-xs font-medium text-text-primary truncate">{item.title}</p>
                     </div>
                     <span className="text-xs font-semibold text-text-muted whitespace-nowrap">
-                      {formatPrice(
-                        item.salePriceCents != null && item.saleEndsAt && new Date(item.saleEndsAt) > new Date() ? item.salePriceCents : item.priceCents,
-                        item.currency
-                      )}
+                      {formatPrice(item.salePriceCents != null && item.saleEndsAt && new Date(item.saleEndsAt) > new Date() ? item.salePriceCents : item.priceCents, item.currency)}
                     </span>
                   </div>
                 ))}
@@ -481,7 +589,18 @@ export default function BillingPage() {
 
               {/* Security note */}
               <div className="mt-4 flex items-start gap-2 text-[11px] text-text-dim">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 mt-0.5" style={{ color: "var(--theme-success-text)" }}>
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="flex-shrink-0 mt-0.5"
+                  style={{ color: "var(--theme-success-text)" }}
+                >
                   <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                 </svg>
                 <span>Your payment is secured with 256-bit SSL encryption. We never store your card details.</span>

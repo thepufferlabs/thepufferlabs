@@ -1,10 +1,27 @@
 import type { Metadata } from "next";
+import { JetBrains_Mono, Manrope, Sora } from "next/font/google";
 import ThemeProvider from "@/components/ThemeProvider";
 import AuthProvider from "@/components/AuthProvider";
 import CartProvider from "@/components/CartProvider";
+import MotionProvider from "@/components/motion/MotionProvider";
 import Navbar from "@/components/sections/Navbar";
 import ToastContainer from "@/components/ui/Toast";
 import "./globals.css";
+
+const sansFont = Manrope({
+  subsets: ["latin"],
+  variable: "--font-sans-local",
+});
+
+const displayFont = Sora({
+  subsets: ["latin"],
+  variable: "--font-display-local",
+});
+
+const monoFont = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-mono-local",
+});
 
 export const metadata: Metadata = {
   title: "The Puffer Labs — Expand Your Knowledge",
@@ -27,17 +44,19 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="h-full antialiased" data-scroll-behavior="smooth" suppressHydrationWarning>
+    <html lang="en" className={`h-full antialiased ${sansFont.variable} ${displayFont.variable} ${monoFont.variable}`} data-scroll-behavior="smooth" suppressHydrationWarning>
       <body className="min-h-full flex flex-col">
-        <ThemeProvider>
-          <AuthProvider>
-            <CartProvider>
-              <Navbar />
-              <ToastContainer />
-              {children}
-            </CartProvider>
-          </AuthProvider>
-        </ThemeProvider>
+        <MotionProvider>
+          <ThemeProvider>
+            <AuthProvider>
+              <CartProvider>
+                <Navbar />
+                <ToastContainer />
+                {children}
+              </CartProvider>
+            </AuthProvider>
+          </ThemeProvider>
+        </MotionProvider>
       </body>
     </html>
   );

@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import type { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { showToast } from "@/components/ui/Toast";
-import type { UserRole } from "@/lib/database.types";
+import type { Database, UserRole } from "@/lib/database.types";
 
 type AuthContextType = {
   user: User | null;
@@ -70,12 +70,16 @@ async function syncProfile(user: User) {
   const avatar = freshMeta.avatar_url || freshMeta.picture || null;
   const name = freshMeta.full_name || freshMeta.name || freshMeta.user_name || null;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (supabase.from("profiles") as any)
+  const profileUpdate: Database["public"]["Tables"]["profiles"]["Update"] = {
+    full_name: name,
+    display_name: name,
+    avatar_url: avatar,
+  };
+
+  await supabase
+    .from("profiles")
     .update({
-      full_name: name,
-      display_name: name,
-      avatar_url: avatar,
+      ...profileUpdate,
     })
     .eq("id", user.id);
 }
@@ -89,10 +93,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
 
   async function fetchRole(userId: string) {
     try {
-      const { data } = await (supabase.from("profiles") as any)
-        .select("role")
-        .eq("id", userId)
-        .single() as { data: { role: UserRole } | null };
+      const { data } = await supabase.from("profiles").select("role").eq("id", userId).single();
       setRole(data?.role ?? null);
     } catch {
       setRole(null);
@@ -101,10 +102,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
 
   async function fetchPurchases(userId: string) {
     try {
-      const { count } = await (supabase.from("orders") as any)
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", userId)
-        .eq("status", "paid") as { count: number | null };
+      const { count } = await supabase.from("orders").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("status", "paid");
       setHasPurchases((count ?? 0) > 0);
     } catch {
       setHasPurchases(false);

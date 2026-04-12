@@ -2,9 +2,8 @@
 
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import type { CourseInfo, FlashSale } from "@/lib/courses/types";
-import type { Json } from "@/lib/database.types";
+import type { Database, Json } from "@/lib/database.types";
 import { supabase } from "@/lib/supabase";
 import { useCart, type CartItem } from "@/components/CartProvider";
 import { useAuth } from "@/components/AuthProvider";
@@ -15,6 +14,9 @@ interface CourseCatalogProps {
   courses: CourseInfo[];
   basePath: string;
 }
+
+type ProductRow = Database["public"]["Tables"]["products"]["Row"];
+type UserEntitlementRow = Database["public"]["Tables"]["user_entitlements"]["Row"];
 
 const CATEGORY_LABELS: Record<string, string> = {
   devops: "DevOps & Infrastructure",
@@ -28,47 +30,21 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 const CATEGORY_COLORS: Record<string, string> = {
-  devops: "bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20",
-  architecture: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20",
-  backend: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
-  frontend: "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20",
-  security: "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20",
-  data: "bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20",
-  distributed: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",
-  testing: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20",
-};
-
-const LEVEL_COLORS: Record<string, string> = {
-  beginner: "bg-green-500/10 text-green-400 border-green-500/20",
-  intermediate: "bg-blue-500/10 text-blue-400 border-blue-500/20",
-  advanced: "bg-purple-500/10 text-purple-400 border-purple-500/20",
-  "beginner-to-advanced": "bg-teal/10 text-teal border-teal/20",
+  devops: "bg-[var(--theme-white-alpha-5)] text-text-muted border-[var(--theme-border)]",
+  architecture: "bg-[var(--theme-white-alpha-5)] text-text-muted border-[var(--theme-border)]",
+  backend: "bg-[var(--theme-white-alpha-5)] text-text-muted border-[var(--theme-border)]",
+  frontend: "bg-[var(--theme-white-alpha-5)] text-text-muted border-[var(--theme-border)]",
+  security: "bg-[var(--theme-white-alpha-5)] text-text-muted border-[var(--theme-border)]",
+  data: "bg-[var(--theme-white-alpha-5)] text-text-muted border-[var(--theme-border)]",
+  distributed: "bg-[var(--theme-white-alpha-5)] text-text-muted border-[var(--theme-border)]",
+  testing: "bg-[var(--theme-white-alpha-5)] text-text-muted border-[var(--theme-border)]",
 };
 
 const STATUS_CONFIG: Record<string, { label: string; class: string }> = {
-  published: { label: "Live", class: "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/25" },
-  draft: { label: "Coming Soon", class: "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/25" },
-  beta: { label: "Beta", class: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/25" },
+  published: { label: "Live", class: "bg-teal/10 text-teal border-teal/25" },
+  draft: { label: "Coming Soon", class: "bg-[var(--theme-white-alpha-5)] text-text-dim border-[var(--theme-border)]" },
+  beta: { label: "Beta", class: "bg-lime/10 text-lime-dark border-lime/25" },
 };
-
-function formatLevel(level: string): string {
-  return level
-    .split("-")
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" \u2192 ");
-}
-
-function timeAgo(dateStr: string): string {
-  if (!dateStr) return "";
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const days = Math.floor(diff / 86400000);
-  if (days === 0) return "today";
-  if (days === 1) return "yesterday";
-  if (days < 7) return `${days}d ago`;
-  if (days < 30) return `${Math.floor(days / 7)}w ago`;
-  if (days < 365) return `${Math.floor(days / 30)}mo ago`;
-  return `${Math.floor(days / 365)}y ago`;
-}
 
 function estimateDuration(docCount: number): string {
   const mins = docCount * 12; // ~12 min per lesson avg
@@ -113,7 +89,9 @@ export default function CourseCatalog({ courses, basePath }: CourseCatalogProps)
 
   // Fetch live course list from Supabase (so new courses appear without redeployment)
   const [liveCourseList, setLiveCourseList] = useState<CourseInfo[]>(courses);
-  const [livePricing, setLivePricing] = useState<Record<string, { productId: string; priceCents: number; currency: string; comparePriceCents: number | null; flashSale: FlashSale | null; thumbnailPath: string | null }>>({});
+  const [livePricing, setLivePricing] = useState<
+    Record<string, { productId: string; priceCents: number; currency: string; comparePriceCents: number | null; flashSale: FlashSale | null; thumbnailPath: string | null }>
+  >({});
 
   // Track which products the user has purchased (entitlements)
   const [ownedProducts, setOwnedProducts] = useState<Set<string>>(new Set());
@@ -121,14 +99,10 @@ export default function CourseCatalog({ courses, basePath }: CourseCatalogProps)
   useEffect(() => {
     async function fetchLiveCourses() {
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-      const { data } = await (supabase.from("products") as any)
-        .select("*")
-        .eq("product_type", "course")
-        .eq("status", "published")
-        .order("title") as { data: any[] | null };
+      const { data } = await supabase.from("products").select("*").eq("product_type", "course").eq("status", "published").order("title");
       if (!data) return;
       const pricingMap: typeof livePricing = {};
-      const courseList: CourseInfo[] = data.map((row: any) => {
+      const courseList: CourseInfo[] = data.map((row: ProductRow) => {
         const flashSale = parseFlashSaleFromMeta(row.metadata);
         pricingMap[row.slug] = {
           productId: row.id,
@@ -175,15 +149,27 @@ export default function CourseCatalog({ courses, basePath }: CourseCatalogProps)
 
   // Fetch user entitlements
   useEffect(() => {
-    if (!user) { setOwnedProducts(new Set()); return; }
+    let cancelled = false;
+
     async function fetchEntitlements() {
-      const { data } = await (supabase.from("user_entitlements") as any)
-        .select("product_id")
-        .eq("user_id", user!.id)
-        .eq("is_active", true) as { data: { product_id: string }[] | null };
-      if (data) setOwnedProducts(new Set(data.map((e) => e.product_id)));
+      if (!user) {
+        if (!cancelled) {
+          setOwnedProducts(new Set());
+        }
+        return;
+      }
+
+      const { data } = await supabase.from("user_entitlements").select("product_id").eq("user_id", user.id).eq("is_active", true);
+      if (!cancelled && data) {
+        setOwnedProducts(new Set(data.map((e: Pick<UserEntitlementRow, "product_id">) => e.product_id)));
+      }
     }
+
     fetchEntitlements();
+
+    return () => {
+      cancelled = true;
+    };
   }, [user]);
 
   // Use the live course list (already includes live pricing)
@@ -342,7 +328,7 @@ export default function CourseCatalog({ courses, basePath }: CourseCatalogProps)
               <span key={t.key}>{t.text}</span>
             ) : t.isQualifier ? (
               <span key={t.key}>
-                <span className="text-blue-400">{t.text.split(":")[0]}:</span>
+                <span className="text-teal/80">{t.text.split(":")[0]}:</span>
                 <span className="text-teal">{t.text.split(":").slice(1).join(":")}</span>
               </span>
             ) : (
@@ -421,7 +407,7 @@ export default function CourseCatalog({ courses, basePath }: CourseCatalogProps)
                 }`}
               >
                 <span>
-                  <span className="text-blue-400">{s.display.split(":")[0]}</span>
+                  <span className="text-teal/80">{s.display.split(":")[0]}</span>
                   <span className="text-text-dim">:</span>
                   <span className="text-teal">{s.display.split(":").slice(1).join(":")}</span>
                 </span>
@@ -440,7 +426,13 @@ export default function CourseCatalog({ courses, basePath }: CourseCatalogProps)
       {filtered.length > 0 ? (
         <div className="grid gap-5 sm:grid-cols-2">
           {filtered.map((course) => (
-            <EnhancedCourseCard key={course.slug} course={course} basePath={basePath} productId={livePricing[course.slug]?.productId ?? ""} isOwned={ownedProducts.has(livePricing[course.slug]?.productId ?? "")} />
+            <EnhancedCourseCard
+              key={course.slug}
+              course={course}
+              basePath={basePath}
+              productId={livePricing[course.slug]?.productId ?? ""}
+              isOwned={ownedProducts.has(livePricing[course.slug]?.productId ?? "")}
+            />
           ))}
         </div>
       ) : (
@@ -462,6 +454,7 @@ export default function CourseCatalog({ courses, basePath }: CourseCatalogProps)
 function EnhancedCourseCard({ course, basePath, productId, isOwned }: { course: CourseInfo; basePath: string; productId: string; isOwned: boolean }) {
   const router = useRouter();
   const { addItem, isInCart } = useCart();
+  const courseHref = `${basePath}/courses/${course.slug}/`;
 
   const freeDoc = course.freeContentCount ?? course.previewDocPaths.length;
   const premiumDoc = course.premiumContentCount ?? course.premiumDocPaths.length;
@@ -512,16 +505,29 @@ function EnhancedCourseCard({ course, basePath, productId, isOwned }: { course: 
     router.push(`${basePath}/cart/`);
   }
 
+  function handleOpenCourse() {
+    router.push(courseHref);
+  }
+
+  function handleCardKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      handleOpenCourse();
+    }
+  }
+
   return (
     <div
-      className={`group relative rounded-xl border bg-navy-light transition-all duration-300 p-5 flex flex-col ${
+      className={`group relative rounded-xl border bg-navy-light transition-all duration-300 p-5 flex flex-col cursor-pointer ${
         activeSale ? "border-amber-500/25 hover:border-amber-400/40" : "border-[var(--theme-border)] hover:border-teal/30"
       }`}
       style={{ boxShadow: "var(--theme-card-shadow)" }}
+      onClick={handleOpenCourse}
+      onKeyDown={handleCardKeyDown}
+      role="link"
+      tabIndex={0}
+      aria-label={`Open ${course.title}`}
     >
-      {/* Overlay link for card navigation */}
-      <Link href={`${basePath}/courses/${course.slug}/`} className="absolute inset-0 z-0 rounded-xl" aria-label={course.title} />
-
       {/* Header: category + status */}
       <div className="flex items-center justify-between mb-3 relative z-[1]">
         <span className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider border ${categoryClass}`}>{CATEGORY_LABELS[course.category] ?? course.category}</span>
@@ -537,11 +543,13 @@ function EnhancedCourseCard({ course, basePath, productId, isOwned }: { course: 
       {/* Free / Premium bar */}
       <div className="mb-3 relative z-[1]">
         <div className="flex h-1 rounded-full overflow-hidden bg-[var(--theme-white-alpha-5)]">
-          <div className="bg-green-400/70 rounded-l-full" style={{ width: `${freePercent}%` }} />
-          <div className="bg-amber-400/50 rounded-r-full" style={{ width: `${100 - freePercent}%` }} />
+          <div className="bg-teal/80 rounded-l-full" style={{ width: `${freePercent}%` }} />
+          <div className="bg-lime/50 rounded-r-full" style={{ width: `${100 - freePercent}%` }} />
         </div>
         <div className="flex items-center justify-between mt-1.5 text-[10px] text-text-dim">
-          <span>{freeDoc} free &middot; {premiumDoc} premium</span>
+          <span>
+            {freeDoc} free &middot; {premiumDoc} premium
+          </span>
           <span>{estimateDuration(totalDoc)}</span>
         </div>
       </div>
@@ -562,7 +570,10 @@ function EnhancedCourseCard({ course, basePath, productId, isOwned }: { course: 
         {isOwned ? (
           /* Enrolled state — no price, no cart buttons */
           <div className="flex items-center justify-between">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold" style={{ background: "var(--theme-success-bg)", color: "var(--theme-success-text)", border: "1px solid var(--theme-success-border)" }}>
+            <span
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold"
+              style={{ background: "var(--theme-success-bg)", color: "var(--theme-success-text)", border: "1px solid var(--theme-success-border)" }}
+            >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="20 6 9 17 4 12" />
               </svg>
@@ -573,9 +584,14 @@ function EnhancedCourseCard({ course, basePath, productId, isOwned }: { course: 
         ) : activeSale ? (
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xl font-bold" style={{ color: "var(--theme-sale-text)" }}>{formatPrice(activeSale.salePriceCents, course.currency)}</span>
+              <span className="text-xl font-bold" style={{ color: "var(--theme-sale-text)" }}>
+                {formatPrice(activeSale.salePriceCents, course.currency)}
+              </span>
               <span className="text-xs text-text-dim line-through">{formatPrice(course.priceCents, course.currency)}</span>
-              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold" style={{ background: "var(--theme-sale-bg)", color: "var(--theme-sale-text)", border: "1px solid var(--theme-sale-border)" }}>
+              <span
+                className="px-1.5 py-0.5 rounded text-[9px] font-bold"
+                style={{ background: "var(--theme-sale-bg)", color: "var(--theme-sale-text)", border: "1px solid var(--theme-sale-border)" }}
+              >
                 {Math.round((1 - activeSale.salePriceCents / course.priceCents) * 100)}% OFF
               </span>
             </div>
@@ -591,20 +607,30 @@ function EnhancedCourseCard({ course, basePath, productId, isOwned }: { course: 
                     disabled={inCart}
                     title={inCart ? "In Cart" : "Add to Cart"}
                     className="p-2 rounded-lg border transition-colors cursor-pointer disabled:cursor-default"
-                    style={inCart ? { borderColor: "var(--theme-success-border)", color: "var(--theme-success-text)", background: "var(--theme-success-bg)" } : { borderColor: "var(--theme-border)", color: "var(--color-text-muted)" }}
+                    style={
+                      inCart
+                        ? { borderColor: "var(--theme-success-border)", color: "var(--theme-success-text)", background: "var(--theme-success-bg)" }
+                        : { borderColor: "var(--theme-border)", color: "var(--color-text-muted)" }
+                    }
                   >
                     {inCart ? (
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
                     ) : (
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" /><path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6" /></svg>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="9" cy="21" r="1" />
+                        <circle cx="20" cy="21" r="1" />
+                        <path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6" />
+                      </svg>
                     )}
                   </button>
-                  <button
-                    onClick={handleBuyNow}
-                    title="Buy Now"
-                    className="p-2 rounded-lg bg-teal text-btn-text hover:bg-teal-dark transition-colors cursor-pointer"
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" /><line x1="3" y1="6" x2="21" y2="6" /><path d="M16 10a4 4 0 01-8 0" /></svg>
+                  <button onClick={handleBuyNow} title="Buy Now" className="p-2 rounded-lg bg-teal text-btn-text hover:bg-teal-dark transition-colors cursor-pointer">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
+                      <line x1="3" y1="6" x2="21" y2="6" />
+                      <path d="M16 10a4 4 0 01-8 0" />
+                    </svg>
                   </button>
                 </div>
               )}
@@ -613,9 +639,7 @@ function EnhancedCourseCard({ course, basePath, productId, isOwned }: { course: 
         ) : (
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              {course.comparePriceCents != null && course.comparePriceCents > 0 && (
-                <span className="text-xs text-text-dim line-through">{formatPrice(course.comparePriceCents, course.currency)}</span>
-              )}
+              {course.comparePriceCents != null && course.comparePriceCents > 0 && <span className="text-xs text-text-dim line-through">{formatPrice(course.comparePriceCents, course.currency)}</span>}
               <span className="text-lg font-bold text-teal">{course.priceCents > 0 ? formatPrice(course.priceCents, course.currency) : "Free"}</span>
             </div>
             {productId && course.priceCents > 0 && (
@@ -625,20 +649,30 @@ function EnhancedCourseCard({ course, basePath, productId, isOwned }: { course: 
                   disabled={inCart}
                   title={inCart ? "In Cart" : "Add to Cart"}
                   className="p-2 rounded-lg border transition-colors cursor-pointer disabled:cursor-default"
-                  style={inCart ? { borderColor: "var(--theme-success-border)", color: "var(--theme-success-text)", background: "var(--theme-success-bg)" } : { borderColor: "var(--theme-border)", color: "var(--color-text-muted)" }}
+                  style={
+                    inCart
+                      ? { borderColor: "var(--theme-success-border)", color: "var(--theme-success-text)", background: "var(--theme-success-bg)" }
+                      : { borderColor: "var(--theme-border)", color: "var(--color-text-muted)" }
+                  }
                 >
                   {inCart ? (
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
                   ) : (
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" /><path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6" /></svg>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="9" cy="21" r="1" />
+                      <circle cx="20" cy="21" r="1" />
+                      <path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6" />
+                    </svg>
                   )}
                 </button>
-                <button
-                  onClick={handleBuyNow}
-                  title="Buy Now"
-                  className="p-2 rounded-lg bg-teal text-btn-text hover:bg-teal-dark transition-colors cursor-pointer"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" /><line x1="3" y1="6" x2="21" y2="6" /><path d="M16 10a4 4 0 01-8 0" /></svg>
+                <button onClick={handleBuyNow} title="Buy Now" className="p-2 rounded-lg bg-teal text-btn-text hover:bg-teal-dark transition-colors cursor-pointer">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
+                    <line x1="3" y1="6" x2="21" y2="6" />
+                    <path d="M16 10a4 4 0 01-8 0" />
+                  </svg>
                 </button>
               </div>
             )}

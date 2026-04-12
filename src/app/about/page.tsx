@@ -22,8 +22,8 @@ export default function AboutPage() {
   return (
     <div className="min-h-screen bg-navy relative overflow-hidden pt-16">
       {/* Background */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_20%,rgba(45,212,191,0.06)_0%,transparent_60%)]" />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_70%_80%,rgba(163,230,53,0.04)_0%,transparent_50%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_20%,rgba(34,197,94,0.1)_0%,transparent_58%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_70%_80%,rgba(134,239,172,0.08)_0%,transparent_48%)]" />
 
       {/* Hero */}
       <section className="relative max-w-6xl mx-auto px-6 lg:px-8 pt-12 pb-12">
@@ -103,7 +103,7 @@ export default function AboutPage() {
                 alt={ownerName}
                 width={200}
                 height={200}
-                className="relative rounded-2xl object-cover drop-shadow-[0_0_50px_rgba(45,212,191,0.2)]"
+                className="relative rounded-2xl object-cover drop-shadow-[0_0_56px_rgba(34,197,94,0.18)]"
                 loading="eager"
                 priority
               />
@@ -123,7 +123,7 @@ export default function AboutPage() {
       <section className="relative max-w-6xl mx-auto px-6 lg:px-8 py-20">
         <h2 className="text-xs font-semibold tracking-[0.2em] uppercase text-text-dim font-mono mb-2 text-center">Career Journey</h2>
         <p className="text-2xl font-bold text-text-primary text-center mb-12">
-          From Developer to <span className="bg-gradient-to-r from-teal to-lime bg-clip-text text-transparent">Technical Lead</span>
+          From Developer to <span className="bg-gradient-to-r from-teal to-lime bg-clip-text text-transparent">Architect</span>
         </p>
 
         <CareerTimeline />
@@ -170,7 +170,7 @@ export default function AboutPage() {
           <div className="flex flex-wrap justify-center gap-3">
             <a
               href={`mailto:${ownerEmail}`}
-              className="inline-flex items-center justify-center px-6 py-3 text-sm font-semibold rounded-xl bg-teal text-navy hover:bg-teal-dark shadow-[0_0_24px_rgba(45,212,191,0.25)] hover:shadow-[0_0_32px_rgba(45,212,191,0.4)] transition-all active:scale-[0.98]"
+              className="inline-flex items-center justify-center px-6 py-3 text-sm font-semibold rounded-2xl bg-teal text-btn-text hover:bg-teal-dark shadow-[0_18px_36px_rgba(34,197,94,0.22)] hover:shadow-[0_22px_44px_rgba(34,197,94,0.3)] transition-all active:scale-[0.98]"
             >
               Say Hello
             </a>

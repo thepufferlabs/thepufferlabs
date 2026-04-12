@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import Image from "next/image";
 import type { Provider } from "@supabase/supabase-js";
 import { supabase, getAuthCallbackUrl } from "@/lib/supabase";
 import AvatarCropper from "@/components/ui/AvatarCropper";
@@ -342,7 +343,7 @@ export default function AuthModal({ open, onClose }: AuthModalProps) {
                     style={{ borderColor: avatarPreview ? "var(--color-teal)" : "var(--theme-border)", background: "var(--color-navy-light)" }}
                   >
                     {avatarPreview ? (
-                      <img src={avatarPreview} alt="Avatar preview" className="w-full h-full object-cover" />
+                      <Image src={avatarPreview} alt="Avatar preview" width={240} height={240} className="w-full h-full object-cover" unoptimized />
                     ) : (
                       <div className="flex flex-col items-center gap-2 text-text-dim">
                         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">

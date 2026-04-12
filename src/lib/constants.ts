@@ -7,9 +7,8 @@ export const SITE = {
 
 export const NAV_LINKS = [
   { label: "Home", href: "/" },
-  { label: "About Me", href: "/about" },
   { label: "Blogs", href: "/blogs" },
-  { label: "Courses", href: "/courses" },
+  { label: "Premium", href: "/courses" },
 ] as const;
 
 export const SOCIAL_LINKS = [

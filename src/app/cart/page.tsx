@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useCart, getEffectivePrice } from "@/components/CartProvider";
@@ -81,7 +82,7 @@ export default function CartPage() {
                   {/* Thumbnail */}
                   {item.thumbnailUrl && (
                     <div className="w-14 h-14 rounded-lg overflow-hidden bg-navy-light flex-shrink-0">
-                      <img src={item.thumbnailUrl} alt={item.title} className="w-full h-full object-cover" />
+                      <Image src={item.thumbnailUrl} alt={item.title} width={56} height={56} className="w-full h-full object-cover" unoptimized />
                     </div>
                   )}
 
@@ -124,12 +125,7 @@ export default function CartPage() {
 
               {/* Coupon */}
               <div className="mb-4">
-                <CouponInput
-                  productId={items.length === 1 ? items[0].productId : ""}
-                  priceCents={subtotalCents}
-                  currency={currency}
-                  onApply={handleCouponApply}
-                />
+                <CouponInput productId={items.length === 1 ? items[0].productId : ""} priceCents={subtotalCents} currency={currency} onApply={handleCouponApply} />
               </div>
 
               {/* Totals */}

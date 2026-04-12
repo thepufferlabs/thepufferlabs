@@ -69,7 +69,7 @@ export default function PremiumPage() {
           {PREMIUM_CONTENT.map((item) => (
             <div
               key={item.title}
-              className="group rounded-2xl border p-6 transition-all duration-300 hover:border-teal/30 hover:shadow-[0_0_30px_rgba(45,212,191,0.08)]"
+              className="group rounded-2xl border p-6 transition-all duration-300 hover:border-teal/30 hover:shadow-[0_20px_50px_rgba(34,197,94,0.08)]"
               style={{
                 background: "var(--color-navy-light)",
                 borderColor: "var(--theme-border)",

@@ -1,5 +1,9 @@
+import { HoverLift, StaggerGroup, StaggerItem } from "@/components/motion/Reveal";
+import Badge from "@/components/ui/Badge";
+import Card, { CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/Card";
 import SectionWrapper from "@/components/ui/SectionWrapper";
 import SectionHeading from "@/components/ui/SectionHeading";
+import Separator from "@/components/ui/Separator";
 import Button from "@/components/ui/Button";
 
 const ownerEmail = process.env.NEXT_PUBLIC_OWNER_EMAIL ?? "";
@@ -67,8 +71,8 @@ export default function Consulting() {
   return (
     <SectionWrapper id="consulting" className="relative overflow-hidden">
       {/* Background effects */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_70%_50%,rgba(163,230,53,0.04)_0%,transparent_60%)]" />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_80%,rgba(45,212,191,0.04)_0%,transparent_50%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_70%_50%,rgba(134,239,172,0.08)_0%,transparent_56%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_30%_80%,rgba(34,197,94,0.08)_0%,transparent_48%)]" />
 
       <div className="relative">
         <SectionHeading
@@ -77,68 +81,57 @@ export default function Consulting() {
           description="Whether it's open-source collaboration, focused consulting, or a full-time partnership — let's build something meaningful together."
         />
 
-        <div className="grid lg:grid-cols-3 gap-6 max-w-6xl mx-auto items-start">
+        <StaggerGroup className="grid lg:grid-cols-3 gap-6 max-w-6xl mx-auto items-start" staggerChildren={0.1} amount={0.08}>
           {plans.map((plan) => (
-            <div
-              key={plan.tier}
-              className={`relative rounded-2xl transition-all duration-300 ${
-                plan.highlight
-                  ? "border-2 border-teal/40 bg-gradient-to-b from-teal/[0.06] to-transparent shadow-[0_0_60px_rgba(45,212,191,0.08)] lg:-mt-4 lg:mb-[-16px]"
-                  : "border border-[var(--theme-border)] bg-[var(--theme-white-alpha-5)] hover:border-[var(--theme-white-alpha-10)] hover:bg-[var(--theme-white-alpha-5)]"
-              }`}
-            >
-              {/* Badge */}
-              {plan.badge && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                  <span
-                    className={`inline-block px-3 py-1 rounded-full text-[10px] font-semibold tracking-wider uppercase ${
-                      plan.highlight ? "bg-teal text-navy" : "bg-[var(--theme-white-alpha-10)] text-text-muted border border-[var(--theme-white-alpha-10)]"
-                    }`}
-                  >
-                    {plan.badge}
-                  </span>
-                </div>
-              )}
+            <StaggerItem key={plan.tier} y={plan.highlight ? 18 : 26}>
+              <HoverLift lift={plan.highlight ? 14 : 10} scale={plan.highlight ? 1.02 : 1.012}>
+                <Card className={plan.highlight ? "border-teal/35 bg-[linear-gradient(180deg,rgba(52,211,153,0.12),transparent)] lg:-mt-4 lg:mb-[-16px]" : ""}>
+                  {plan.badge ? (
+                    <div className="absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2">
+                      <Badge variant={plan.highlight ? "default" : "outline"} className="px-3 py-1 text-[10px] tracking-[0.18em]">
+                        {plan.badge}
+                      </Badge>
+                    </div>
+                  ) : null}
 
-              <div className="p-8">
-                {/* Icon + Tier */}
-                <div className="flex items-center gap-3 mb-6">
-                  <div className={`p-2.5 rounded-xl ${plan.highlight ? "bg-teal/10 text-teal" : "bg-[var(--theme-white-alpha-5)] text-text-muted"}`}>{plan.icon}</div>
-                  <h3 className="text-lg font-semibold text-text-primary">{plan.tier}</h3>
-                </div>
+                  <CardHeader className="space-y-5">
+                    <div className="flex items-center gap-3">
+                      <div className={`rounded-xl p-2.5 ${plan.highlight ? "bg-teal/10 text-teal" : "bg-[var(--theme-secondary)] text-text-muted"}`}>{plan.icon}</div>
+                      <CardTitle>{plan.tier}</CardTitle>
+                    </div>
 
-                {/* Price */}
-                <div className="mb-5">
-                  <span className={`text-4xl font-bold tracking-tight ${plan.highlight ? "bg-gradient-to-r from-teal to-lime bg-clip-text text-transparent" : "text-text-primary"}`}>{plan.price}</span>
-                  {plan.period && <span className="text-sm text-text-dim ml-1">{plan.period}</span>}
-                </div>
+                    <div>
+                      <span className={`text-4xl font-bold tracking-tight ${plan.highlight ? "bg-gradient-to-r from-teal to-lime bg-clip-text text-transparent" : "text-text-primary"}`}>
+                        {plan.price}
+                      </span>
+                      {plan.period ? <span className="ml-1 text-sm text-text-dim">{plan.period}</span> : null}
+                    </div>
+                    <CardDescription>{plan.description}</CardDescription>
+                  </CardHeader>
 
-                {/* Description */}
-                <p className="text-sm text-text-muted leading-relaxed mb-6">{plan.description}</p>
+                  <Separator className="mb-6 mt-1" />
 
-                {/* Divider */}
-                <div className={`h-px mb-6 ${plan.highlight ? "bg-teal/20" : "bg-[var(--theme-white-alpha-5)]"}`} />
+                  <CardContent>
+                    <ul className="mb-8 space-y-3">
+                      {plan.features.map((feature) => (
+                        <li key={feature} className="flex items-start gap-2.5 text-sm text-text-muted">
+                          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className={`mt-0.5 shrink-0 ${plan.highlight ? "text-teal" : "text-text-dim"}`}>
+                            <path d="M13.5 4.5L6.5 11.5L2.5 7.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                          {feature}
+                        </li>
+                      ))}
+                    </ul>
 
-                {/* Features */}
-                <ul className="space-y-3 mb-8">
-                  {plan.features.map((feature) => (
-                    <li key={feature} className="flex items-start gap-2.5 text-sm text-text-muted">
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className={`shrink-0 mt-0.5 ${plan.highlight ? "text-teal" : "text-text-dim"}`}>
-                        <path d="M13.5 4.5L6.5 11.5L2.5 7.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                      {feature}
-                    </li>
-                  ))}
-                </ul>
-
-                {/* CTA */}
-                <Button variant={plan.variant} size="lg" href={plan.ctaHref} className="w-full">
-                  {plan.cta}
-                </Button>
-              </div>
-            </div>
+                    <Button variant={plan.variant} size="lg" href={plan.ctaHref} className="w-full">
+                      {plan.cta}
+                    </Button>
+                  </CardContent>
+                </Card>
+              </HoverLift>
+            </StaggerItem>
           ))}
-        </div>
+        </StaggerGroup>
       </div>
     </SectionWrapper>
   );

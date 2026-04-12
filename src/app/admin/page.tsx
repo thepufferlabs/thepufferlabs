@@ -4,51 +4,24 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { supabase } from "@/lib/supabase";
 import { showToast } from "@/components/ui/Toast";
-import type { Json } from "@/lib/database.types";
+import type { Database, Json } from "@/lib/database.types";
 
 // ── Types ───────────────────────────────────────────────────
 
 type AdminTab = "stats" | "products" | "flash_sales" | "coupons" | "bundles";
 
-interface ProductRow {
-  id: string;
-  slug: string;
-  title: string;
-  price_cents: number;
-  currency: string;
-  compare_price_cents: number | null;
-  status: string;
-  metadata: Json;
-}
-
-interface CouponRow {
-  id: string;
-  code: string;
-  coupon_type: "percent" | "fixed_amount";
-  discount_value: number;
-  currency: string;
-  max_uses: number | null;
-  used_count: number;
-  max_uses_per_user: number;
-  min_purchase_cents: number;
-  applies_to_product_id: string | null;
-  valid_from: string;
-  valid_until: string | null;
-  is_active: boolean;
-}
-
-interface BundleRow {
-  id: string;
-  slug: string;
-  name: string;
-  description: string | null;
-  price_cents: number;
-  currency: string;
-  compare_price_cents: number | null;
-  is_active: boolean;
-  valid_from: string | null;
-  valid_until: string | null;
-}
+type ProductRow = Pick<Database["public"]["Tables"]["products"]["Row"], "id" | "slug" | "title" | "price_cents" | "currency" | "compare_price_cents" | "status" | "metadata">;
+type ProductStatsRow = Pick<Database["public"]["Tables"]["products"]["Row"], "id" | "metadata">;
+type ProductTitleRow = Pick<Database["public"]["Tables"]["products"]["Row"], "id" | "title">;
+type ProductUpdate = Database["public"]["Tables"]["products"]["Update"];
+type CouponRow = Database["public"]["Tables"]["coupons"]["Row"];
+type CouponInsert = Database["public"]["Tables"]["coupons"]["Insert"];
+type CouponUpdate = Database["public"]["Tables"]["coupons"]["Update"];
+type BundleRow = Database["public"]["Tables"]["bundles"]["Row"];
+type BundleInsert = Database["public"]["Tables"]["bundles"]["Insert"];
+type BundleUpdate = Database["public"]["Tables"]["bundles"]["Update"];
+type BundleProductRow = Database["public"]["Tables"]["bundle_products"]["Row"];
+type BundleProductInsert = Database["public"]["Tables"]["bundle_products"]["Insert"];
 
 interface FlashSale {
   sale_price_cents: number;
@@ -98,8 +71,7 @@ const TABS: { key: AdminTab; label: string }[] = [
   { key: "bundles", label: "Bundles" },
 ];
 
-const inputClass =
-  "rounded-lg border bg-navy-light px-3 py-2 text-sm text-text-primary placeholder:text-text-dim outline-none focus:border-teal/50 transition-colors w-full";
+const inputClass = "rounded-lg border bg-navy-light px-3 py-2 text-sm text-text-primary placeholder:text-text-dim outline-none focus:border-teal/50 transition-colors w-full";
 
 // ── Main Component ──────────────────────────────────────────
 
@@ -173,27 +145,36 @@ function StatsSection() {
   const [stats, setStats] = useState<Stats | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+
     async function load() {
       const [products, coupons, orders] = await Promise.all([
-        (supabase.from("products") as any).select("id, metadata", { count: "exact" }),
-        (supabase.from("coupons") as any).select("id", { count: "exact", head: true }).eq("is_active", true),
-        (supabase.from("orders") as any).select("id", { count: "exact", head: true }).eq("status", "paid"),
+        supabase.from("products").select("id, metadata", { count: "exact" }),
+        supabase.from("coupons").select("id", { count: "exact", head: true }).eq("is_active", true),
+        supabase.from("orders").select("id", { count: "exact", head: true }).eq("status", "paid"),
       ]);
 
-      const productRows = (products.data ?? []) as ProductRow[];
+      const productRows = (products.data ?? []) as ProductStatsRow[];
       const activeSales = productRows.filter((p) => {
         const fs = getFlashSale(p.metadata);
         return fs && new Date(fs.ends_at) > new Date();
       }).length;
 
-      setStats({
-        totalProducts: products.count ?? 0,
-        activeCoupons: coupons.count ?? 0,
-        activeSales,
-        paidOrders: orders.count ?? 0,
-      });
+      if (!cancelled) {
+        setStats({
+          totalProducts: products.count ?? 0,
+          activeCoupons: coupons.count ?? 0,
+          activeSales,
+          paidOrders: orders.count ?? 0,
+        });
+      }
     }
-    load();
+
+    void load();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   if (!stats) return <div className="text-text-dim text-sm">Loading stats...</div>;
@@ -225,16 +206,27 @@ function ProductsSection() {
   const [form, setForm] = useState({ price_cents: 0, currency: "INR", compare_price_cents: 0 });
   const [saving, setSaving] = useState(false);
 
-  const load = useCallback(async () => {
-    const { data } = (await (supabase.from("products") as any).select("id, slug, title, price_cents, currency, compare_price_cents, status, metadata").order("title")) as {
-      data: ProductRow[] | null;
-    };
-    setProducts(data ?? []);
+  const fetchProducts = useCallback(async (): Promise<ProductRow[]> => {
+    const { data } = await supabase.from("products").select("id, slug, title, price_cents, currency, compare_price_cents, status, metadata").order("title");
+    return (data ?? []) as ProductRow[];
   }, []);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    let cancelled = false;
+
+    async function loadOnMount() {
+      const rows = await fetchProducts();
+      if (!cancelled) {
+        setProducts(rows);
+      }
+    }
+
+    void loadOnMount();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchProducts]);
 
   function startEdit(p: ProductRow) {
     setEditing(p.id);
@@ -243,20 +235,19 @@ function ProductsSection() {
 
   async function save(id: string) {
     setSaving(true);
-    const { error } = await (supabase.from("products") as any)
-      .update({
-        price_cents: form.price_cents,
-        currency: form.currency,
-        compare_price_cents: form.compare_price_cents || null,
-      })
-      .eq("id", id);
+    const productUpdate: ProductUpdate = {
+      price_cents: form.price_cents,
+      currency: form.currency,
+      compare_price_cents: form.compare_price_cents || null,
+    };
+    const { error } = await supabase.from("products").update(productUpdate).eq("id", id);
     setSaving(false);
     if (error) {
       showToast(error.message, "error");
     } else {
       showToast("Price updated", "success");
       setEditing(null);
-      load();
+      setProducts(await fetchProducts());
     }
   }
 
@@ -267,32 +258,56 @@ function ProductsSection() {
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-sm font-semibold text-text-primary">{p.title}</h3>
-              <p className="text-xs text-text-dim">{p.slug} &middot; {p.status}</p>
+              <p className="text-xs text-text-dim">
+                {p.slug} &middot; {p.status}
+              </p>
             </div>
             {editing !== p.id ? (
               <div className="flex items-center gap-3">
                 <div className="text-right">
-                  {p.compare_price_cents != null && p.compare_price_cents > 0 && (
-                    <span className="text-xs text-text-dim line-through mr-2">{formatPrice(p.compare_price_cents, p.currency)}</span>
-                  )}
+                  {p.compare_price_cents != null && p.compare_price_cents > 0 && <span className="text-xs text-text-dim line-through mr-2">{formatPrice(p.compare_price_cents, p.currency)}</span>}
                   <span className="text-sm font-bold text-teal">{p.price_cents > 0 ? formatPrice(p.price_cents, p.currency) : "Free"}</span>
                 </div>
-                <button onClick={() => startEdit(p)} className="px-3 py-1.5 text-xs font-medium rounded-lg border border-[var(--theme-border)] text-text-muted hover:text-teal hover:border-teal/30 transition-colors cursor-pointer">
+                <button
+                  onClick={() => startEdit(p)}
+                  className="px-3 py-1.5 text-xs font-medium rounded-lg border border-[var(--theme-border)] text-text-muted hover:text-teal hover:border-teal/30 transition-colors cursor-pointer"
+                >
                   Edit
                 </button>
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <input type="number" value={form.price_cents} onChange={(e) => setForm({ ...form, price_cents: +e.target.value })} placeholder="Price (paise)" className={`${inputClass} w-28`} style={{ borderColor: "var(--theme-border)" }} />
+                <input
+                  type="number"
+                  value={form.price_cents}
+                  onChange={(e) => setForm({ ...form, price_cents: +e.target.value })}
+                  placeholder="Price (paise)"
+                  className={`${inputClass} w-28`}
+                  style={{ borderColor: "var(--theme-border)" }}
+                />
                 <select value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })} className={`${inputClass} w-20`} style={{ borderColor: "var(--theme-border)" }}>
                   <option value="INR">INR</option>
                   <option value="USD">USD</option>
                 </select>
-                <input type="number" value={form.compare_price_cents} onChange={(e) => setForm({ ...form, compare_price_cents: +e.target.value })} placeholder="Compare (paise)" className={`${inputClass} w-28`} style={{ borderColor: "var(--theme-border)" }} />
-                <button onClick={() => save(p.id)} disabled={saving} className="px-3 py-1.5 text-xs font-medium rounded-lg bg-teal text-navy hover:bg-teal/90 transition-colors cursor-pointer disabled:opacity-50">
+                <input
+                  type="number"
+                  value={form.compare_price_cents}
+                  onChange={(e) => setForm({ ...form, compare_price_cents: +e.target.value })}
+                  placeholder="Compare (paise)"
+                  className={`${inputClass} w-28`}
+                  style={{ borderColor: "var(--theme-border)" }}
+                />
+                <button
+                  onClick={() => save(p.id)}
+                  disabled={saving}
+                  className="px-3 py-1.5 text-xs font-medium rounded-lg bg-teal text-btn-text hover:bg-teal/90 transition-colors cursor-pointer disabled:opacity-50"
+                >
                   {saving ? "..." : "Save"}
                 </button>
-                <button onClick={() => setEditing(null)} className="px-3 py-1.5 text-xs font-medium rounded-lg border border-[var(--theme-border)] text-text-muted hover:text-text-primary transition-colors cursor-pointer">
+                <button
+                  onClick={() => setEditing(null)}
+                  className="px-3 py-1.5 text-xs font-medium rounded-lg border border-[var(--theme-border)] text-text-muted hover:text-text-primary transition-colors cursor-pointer"
+                >
                   Cancel
                 </button>
               </div>
@@ -313,16 +328,27 @@ function FlashSalesSection() {
   const [form, setForm] = useState({ sale_price_cents: 0, starts_at: "", ends_at: "", label: "" });
   const [saving, setSaving] = useState(false);
 
-  const load = useCallback(async () => {
-    const { data } = (await (supabase.from("products") as any).select("id, slug, title, price_cents, currency, compare_price_cents, status, metadata").order("title")) as {
-      data: ProductRow[] | null;
-    };
-    setProducts(data ?? []);
+  const fetchProducts = useCallback(async (): Promise<ProductRow[]> => {
+    const { data } = await supabase.from("products").select("id, slug, title, price_cents, currency, compare_price_cents, status, metadata").order("title");
+    return (data ?? []) as ProductRow[];
   }, []);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    let cancelled = false;
+
+    async function loadOnMount() {
+      const rows = await fetchProducts();
+      if (!cancelled) {
+        setProducts(rows);
+      }
+    }
+
+    void loadOnMount();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchProducts]);
 
   function startEdit(p: ProductRow) {
     const fs = getFlashSale(p.metadata);
@@ -348,14 +374,14 @@ function FlashSalesSection() {
         is_active: true,
       },
     };
-    const { error } = await (supabase.from("products") as any).update({ metadata: newMeta }).eq("id", p.id);
+    const { error } = await supabase.from("products").update({ metadata: newMeta }).eq("id", p.id);
     setSaving(false);
     if (error) {
       showToast(error.message, "error");
     } else {
       showToast("Flash sale saved", "success");
       setEditing(null);
-      load();
+      setProducts(await fetchProducts());
     }
   }
 
@@ -364,12 +390,12 @@ function FlashSalesSection() {
     const flash = existingMeta.flash_sale as Record<string, Json> | undefined;
     if (!flash) return;
     const newMeta = { ...existingMeta, flash_sale: { ...flash, is_active: false } };
-    const { error } = await (supabase.from("products") as any).update({ metadata: newMeta }).eq("id", p.id);
+    const { error } = await supabase.from("products").update({ metadata: newMeta }).eq("id", p.id);
     if (error) {
       showToast(error.message, "error");
     } else {
       showToast("Flash sale deactivated", "success");
-      load();
+      setProducts(await fetchProducts());
     }
   }
 
@@ -386,16 +412,26 @@ function FlashSalesSection() {
                 <h3 className="text-sm font-semibold text-text-primary">{p.title}</h3>
                 <p className="text-xs text-text-dim">
                   Base: {formatPrice(p.price_cents, p.currency)}
-                  {isActive && fs && <span className="ml-2 text-amber-400">Sale: {formatPrice(fs.sale_price_cents, p.currency)} — {fs.label}</span>}
+                  {isActive && fs && (
+                    <span className="ml-2 text-amber-400">
+                      Sale: {formatPrice(fs.sale_price_cents, p.currency)} — {fs.label}
+                    </span>
+                  )}
                 </p>
               </div>
               <div className="flex items-center gap-2">
                 {isActive && (
-                  <button onClick={() => deactivate(p)} className="px-3 py-1.5 text-xs font-medium rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer">
+                  <button
+                    onClick={() => deactivate(p)}
+                    className="px-3 py-1.5 text-xs font-medium rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
+                  >
                     Deactivate
                   </button>
                 )}
-                <button onClick={() => startEdit(p)} className="px-3 py-1.5 text-xs font-medium rounded-lg border border-[var(--theme-border)] text-text-muted hover:text-teal hover:border-teal/30 transition-colors cursor-pointer">
+                <button
+                  onClick={() => startEdit(p)}
+                  className="px-3 py-1.5 text-xs font-medium rounded-lg border border-[var(--theme-border)] text-text-muted hover:text-teal hover:border-teal/30 transition-colors cursor-pointer"
+                >
                   {isActive ? "Edit Sale" : "Create Sale"}
                 </button>
               </div>
@@ -405,25 +441,57 @@ function FlashSalesSection() {
               <div className="mt-3 pt-3 border-t border-[var(--theme-border)] grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div>
                   <label className="text-[10px] text-text-dim uppercase tracking-wider">Sale Price (paise/cents)</label>
-                  <input type="number" value={form.sale_price_cents} onChange={(e) => setForm({ ...form, sale_price_cents: +e.target.value })} className={inputClass} style={{ borderColor: "var(--theme-border)" }} />
+                  <input
+                    type="number"
+                    value={form.sale_price_cents}
+                    onChange={(e) => setForm({ ...form, sale_price_cents: +e.target.value })}
+                    className={inputClass}
+                    style={{ borderColor: "var(--theme-border)" }}
+                  />
                 </div>
                 <div>
                   <label className="text-[10px] text-text-dim uppercase tracking-wider">Label</label>
-                  <input type="text" value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder="e.g. Launch Sale" className={inputClass} style={{ borderColor: "var(--theme-border)" }} />
+                  <input
+                    type="text"
+                    value={form.label}
+                    onChange={(e) => setForm({ ...form, label: e.target.value })}
+                    placeholder="e.g. Launch Sale"
+                    className={inputClass}
+                    style={{ borderColor: "var(--theme-border)" }}
+                  />
                 </div>
                 <div>
                   <label className="text-[10px] text-text-dim uppercase tracking-wider">Starts At</label>
-                  <input type="datetime-local" value={form.starts_at} onChange={(e) => setForm({ ...form, starts_at: e.target.value })} className={inputClass} style={{ borderColor: "var(--theme-border)" }} />
+                  <input
+                    type="datetime-local"
+                    value={form.starts_at}
+                    onChange={(e) => setForm({ ...form, starts_at: e.target.value })}
+                    className={inputClass}
+                    style={{ borderColor: "var(--theme-border)" }}
+                  />
                 </div>
                 <div>
                   <label className="text-[10px] text-text-dim uppercase tracking-wider">Ends At</label>
-                  <input type="datetime-local" value={form.ends_at} onChange={(e) => setForm({ ...form, ends_at: e.target.value })} className={inputClass} style={{ borderColor: "var(--theme-border)" }} />
+                  <input
+                    type="datetime-local"
+                    value={form.ends_at}
+                    onChange={(e) => setForm({ ...form, ends_at: e.target.value })}
+                    className={inputClass}
+                    style={{ borderColor: "var(--theme-border)" }}
+                  />
                 </div>
                 <div className="col-span-2 md:col-span-4 flex gap-2 justify-end">
-                  <button onClick={() => setEditing(null)} className="px-4 py-2 text-xs font-medium rounded-lg border border-[var(--theme-border)] text-text-muted hover:text-text-primary transition-colors cursor-pointer">
+                  <button
+                    onClick={() => setEditing(null)}
+                    className="px-4 py-2 text-xs font-medium rounded-lg border border-[var(--theme-border)] text-text-muted hover:text-text-primary transition-colors cursor-pointer"
+                  >
                     Cancel
                   </button>
-                  <button onClick={() => save(p)} disabled={saving || !form.ends_at} className="px-4 py-2 text-xs font-semibold rounded-lg bg-teal text-navy hover:bg-teal/90 transition-colors cursor-pointer disabled:opacity-50">
+                  <button
+                    onClick={() => save(p)}
+                    disabled={saving || !form.ends_at}
+                    className="px-4 py-2 text-xs font-semibold rounded-lg bg-teal text-btn-text hover:bg-teal/90 transition-colors cursor-pointer disabled:opacity-50"
+                  >
                     {saving ? "Saving..." : "Save Flash Sale"}
                   </button>
                 </div>
@@ -456,18 +524,31 @@ function CouponsSection() {
     valid_until: "",
   });
 
-  const load = useCallback(async () => {
-    const [c, p] = await Promise.all([
-      (supabase.from("coupons") as any).select("*").order("created_at", { ascending: false }),
-      (supabase.from("products") as any).select("id, title").order("title"),
-    ]);
-    setCoupons((c.data ?? []) as CouponRow[]);
-    setProducts((p.data ?? []) as { id: string; title: string }[]);
+  const fetchCouponsData = useCallback(async (): Promise<{ coupons: CouponRow[]; products: { id: string; title: string }[] }> => {
+    const [c, p] = await Promise.all([supabase.from("coupons").select("*").order("created_at", { ascending: false }), supabase.from("products").select("id, title").order("title")]);
+    return {
+      coupons: c.data ?? [],
+      products: (p.data ?? []) as ProductTitleRow[],
+    };
   }, []);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    let cancelled = false;
+
+    async function loadOnMount() {
+      const data = await fetchCouponsData();
+      if (!cancelled) {
+        setCoupons(data.coupons);
+        setProducts(data.products);
+      }
+    }
+
+    void loadOnMount();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchCouponsData]);
 
   function resetForm() {
     setForm({
@@ -486,7 +567,7 @@ function CouponsSection() {
 
   async function create() {
     setSaving(true);
-    const payload: Record<string, unknown> = {
+    const payload: CouponInsert = {
       code: form.code.toUpperCase().trim(),
       coupon_type: form.coupon_type,
       discount_value: form.discount_value,
@@ -494,13 +575,13 @@ function CouponsSection() {
       max_uses_per_user: +form.max_uses_per_user || 1,
       min_purchase_cents: +form.min_purchase_cents || 0,
       valid_from: new Date(form.valid_from).toISOString(),
+      max_uses: form.max_uses ? +form.max_uses : null,
+      valid_until: form.valid_until ? new Date(form.valid_until).toISOString() : null,
+      applies_to_product_id: form.applies_to_product_id || null,
       is_active: true,
     };
-    if (form.max_uses) payload.max_uses = +form.max_uses;
-    if (form.valid_until) payload.valid_until = new Date(form.valid_until).toISOString();
-    if (form.applies_to_product_id) payload.applies_to_product_id = form.applies_to_product_id;
 
-    const { error } = await (supabase.from("coupons") as any).insert(payload);
+    const { error } = await supabase.from("coupons").insert(payload);
     setSaving(false);
     if (error) {
       showToast(error.message, "error");
@@ -508,25 +589,38 @@ function CouponsSection() {
       showToast("Coupon created", "success");
       setShowCreate(false);
       resetForm();
-      load();
+      const data = await fetchCouponsData();
+      setCoupons(data.coupons);
+      setProducts(data.products);
     }
   }
 
   async function toggleActive(c: CouponRow) {
-    const { error } = await (supabase.from("coupons") as any).update({ is_active: !c.is_active }).eq("id", c.id);
+    const couponUpdate: CouponUpdate = { is_active: !c.is_active };
+    const { error } = await supabase.from("coupons").update(couponUpdate).eq("id", c.id);
     if (error) {
       showToast(error.message, "error");
     } else {
       showToast(c.is_active ? "Coupon deactivated" : "Coupon activated", "success");
-      load();
+      const data = await fetchCouponsData();
+      setCoupons(data.coupons);
+      setProducts(data.products);
     }
   }
 
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-semibold text-text-primary">{coupons.length} coupon{coupons.length !== 1 ? "s" : ""}</h2>
-        <button onClick={() => { setShowCreate(!showCreate); resetForm(); }} className="px-4 py-2 text-xs font-semibold rounded-lg bg-teal text-navy hover:bg-teal/90 transition-colors cursor-pointer">
+        <h2 className="text-sm font-semibold text-text-primary">
+          {coupons.length} coupon{coupons.length !== 1 ? "s" : ""}
+        </h2>
+        <button
+          onClick={() => {
+            setShowCreate(!showCreate);
+            resetForm();
+          }}
+          className="px-4 py-2 text-xs font-semibold rounded-lg bg-teal text-btn-text hover:bg-teal/90 transition-colors cursor-pointer"
+        >
           {showCreate ? "Cancel" : "+ New Coupon"}
         </button>
       </div>
@@ -537,46 +631,100 @@ function CouponsSection() {
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             <div>
               <label className="text-[10px] text-text-dim uppercase tracking-wider">Code</label>
-              <input type="text" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} placeholder="e.g. WELCOME50" className={inputClass} style={{ borderColor: "var(--theme-border)" }} />
+              <input
+                type="text"
+                value={form.code}
+                onChange={(e) => setForm({ ...form, code: e.target.value })}
+                placeholder="e.g. WELCOME50"
+                className={inputClass}
+                style={{ borderColor: "var(--theme-border)" }}
+              />
             </div>
             <div>
               <label className="text-[10px] text-text-dim uppercase tracking-wider">Type</label>
-              <select value={form.coupon_type} onChange={(e) => setForm({ ...form, coupon_type: e.target.value as "percent" | "fixed_amount" })} className={inputClass} style={{ borderColor: "var(--theme-border)" }}>
+              <select
+                value={form.coupon_type}
+                onChange={(e) => setForm({ ...form, coupon_type: e.target.value as "percent" | "fixed_amount" })}
+                className={inputClass}
+                style={{ borderColor: "var(--theme-border)" }}
+              >
                 <option value="percent">Percent Off</option>
                 <option value="fixed_amount">Fixed Amount</option>
               </select>
             </div>
             <div>
               <label className="text-[10px] text-text-dim uppercase tracking-wider">Value ({form.coupon_type === "percent" ? "%" : "paise/cents"})</label>
-              <input type="number" value={form.discount_value} onChange={(e) => setForm({ ...form, discount_value: +e.target.value })} className={inputClass} style={{ borderColor: "var(--theme-border)" }} />
+              <input
+                type="number"
+                value={form.discount_value}
+                onChange={(e) => setForm({ ...form, discount_value: +e.target.value })}
+                className={inputClass}
+                style={{ borderColor: "var(--theme-border)" }}
+              />
             </div>
             <div>
               <label className="text-[10px] text-text-dim uppercase tracking-wider">Max Uses (blank = unlimited)</label>
-              <input type="number" value={form.max_uses} onChange={(e) => setForm({ ...form, max_uses: e.target.value })} placeholder="unlimited" className={inputClass} style={{ borderColor: "var(--theme-border)" }} />
+              <input
+                type="number"
+                value={form.max_uses}
+                onChange={(e) => setForm({ ...form, max_uses: e.target.value })}
+                placeholder="unlimited"
+                className={inputClass}
+                style={{ borderColor: "var(--theme-border)" }}
+              />
             </div>
             <div>
               <label className="text-[10px] text-text-dim uppercase tracking-wider">Max Per User</label>
-              <input type="number" value={form.max_uses_per_user} onChange={(e) => setForm({ ...form, max_uses_per_user: e.target.value })} className={inputClass} style={{ borderColor: "var(--theme-border)" }} />
+              <input
+                type="number"
+                value={form.max_uses_per_user}
+                onChange={(e) => setForm({ ...form, max_uses_per_user: e.target.value })}
+                className={inputClass}
+                style={{ borderColor: "var(--theme-border)" }}
+              />
             </div>
             <div>
               <label className="text-[10px] text-text-dim uppercase tracking-wider">Applies to Product</label>
-              <select value={form.applies_to_product_id} onChange={(e) => setForm({ ...form, applies_to_product_id: e.target.value })} className={inputClass} style={{ borderColor: "var(--theme-border)" }}>
+              <select
+                value={form.applies_to_product_id}
+                onChange={(e) => setForm({ ...form, applies_to_product_id: e.target.value })}
+                className={inputClass}
+                style={{ borderColor: "var(--theme-border)" }}
+              >
                 <option value="">All Products</option>
                 {products.map((p) => (
-                  <option key={p.id} value={p.id}>{p.title}</option>
+                  <option key={p.id} value={p.id}>
+                    {p.title}
+                  </option>
                 ))}
               </select>
             </div>
             <div>
               <label className="text-[10px] text-text-dim uppercase tracking-wider">Valid From</label>
-              <input type="datetime-local" value={form.valid_from} onChange={(e) => setForm({ ...form, valid_from: e.target.value })} className={inputClass} style={{ borderColor: "var(--theme-border)" }} />
+              <input
+                type="datetime-local"
+                value={form.valid_from}
+                onChange={(e) => setForm({ ...form, valid_from: e.target.value })}
+                className={inputClass}
+                style={{ borderColor: "var(--theme-border)" }}
+              />
             </div>
             <div>
               <label className="text-[10px] text-text-dim uppercase tracking-wider">Valid Until (blank = forever)</label>
-              <input type="datetime-local" value={form.valid_until} onChange={(e) => setForm({ ...form, valid_until: e.target.value })} className={inputClass} style={{ borderColor: "var(--theme-border)" }} />
+              <input
+                type="datetime-local"
+                value={form.valid_until}
+                onChange={(e) => setForm({ ...form, valid_until: e.target.value })}
+                className={inputClass}
+                style={{ borderColor: "var(--theme-border)" }}
+              />
             </div>
             <div className="flex items-end">
-              <button onClick={create} disabled={saving || !form.code || !form.discount_value} className="px-4 py-2 text-xs font-semibold rounded-lg bg-teal text-navy hover:bg-teal/90 transition-colors cursor-pointer disabled:opacity-50 w-full">
+              <button
+                onClick={create}
+                disabled={saving || !form.code || !form.discount_value}
+                className="px-4 py-2 text-xs font-semibold rounded-lg bg-teal text-btn-text hover:bg-teal/90 transition-colors cursor-pointer disabled:opacity-50 w-full"
+              >
                 {saving ? "Creating..." : "Create Coupon"}
               </button>
             </div>
@@ -587,11 +735,16 @@ function CouponsSection() {
       {/* List */}
       <div className="space-y-2">
         {coupons.map((c) => (
-          <div key={c.id} className={`rounded-xl border bg-[var(--theme-white-alpha-5)] p-4 flex items-center justify-between ${c.is_active ? "border-[var(--theme-border)]" : "border-red-500/20 opacity-60"}`}>
+          <div
+            key={c.id}
+            className={`rounded-xl border bg-[var(--theme-white-alpha-5)] p-4 flex items-center justify-between ${c.is_active ? "border-[var(--theme-border)]" : "border-red-500/20 opacity-60"}`}
+          >
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-mono text-sm font-bold text-text-primary">{c.code}</span>
-                <span className={`px-2 py-0.5 rounded text-[9px] font-medium ${c.is_active ? "bg-green-500/10 text-green-400 border border-green-500/20" : "bg-red-500/10 text-red-400 border border-red-500/20"}`}>
+                <span
+                  className={`px-2 py-0.5 rounded text-[9px] font-medium ${c.is_active ? "bg-green-500/10 text-green-400 border border-green-500/20" : "bg-red-500/10 text-red-400 border border-red-500/20"}`}
+                >
                   {c.is_active ? "Active" : "Inactive"}
                 </span>
               </div>
@@ -601,7 +754,10 @@ function CouponsSection() {
                 {c.valid_until && ` · Until ${new Date(c.valid_until).toLocaleDateString()}`}
               </p>
             </div>
-            <button onClick={() => toggleActive(c)} className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors cursor-pointer ${c.is_active ? "border-red-500/30 text-red-400 hover:bg-red-500/10" : "border-green-500/30 text-green-400 hover:bg-green-500/10"}`}>
+            <button
+              onClick={() => toggleActive(c)}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors cursor-pointer ${c.is_active ? "border-red-500/30 text-red-400 hover:bg-red-500/10" : "border-green-500/30 text-green-400 hover:bg-green-500/10"}`}
+            >
               {c.is_active ? "Deactivate" : "Activate"}
             </button>
           </div>
@@ -632,42 +788,60 @@ function BundlesSection() {
     selectedProducts: [] as string[],
   });
 
-  const load = useCallback(async () => {
+  const fetchBundlesData = useCallback(async (): Promise<{ bundles: BundleRow[]; products: { id: string; title: string }[]; bundleProducts: Record<string, string[]> }> => {
     const [b, p, bp] = await Promise.all([
-      (supabase.from("bundles") as any).select("*").order("created_at", { ascending: false }),
-      (supabase.from("products") as any).select("id, title").order("title"),
-      (supabase.from("bundle_products") as any).select("bundle_id, product_id"),
+      supabase.from("bundles").select("*").order("created_at", { ascending: false }),
+      supabase.from("products").select("id, title").order("title"),
+      supabase.from("bundle_products").select("bundle_id, product_id"),
     ]);
-    setBundles((b.data ?? []) as BundleRow[]);
-    setProducts((p.data ?? []) as { id: string; title: string }[]);
 
     const bpMap: Record<string, string[]> = {};
-    for (const row of (bp.data ?? []) as { bundle_id: string; product_id: string }[]) {
+    for (const row of (bp.data ?? []) as BundleProductRow[]) {
       if (!bpMap[row.bundle_id]) bpMap[row.bundle_id] = [];
       bpMap[row.bundle_id].push(row.product_id);
     }
-    setBundleProducts(bpMap);
+
+    return {
+      bundles: b.data ?? [],
+      products: (p.data ?? []) as ProductTitleRow[],
+      bundleProducts: bpMap,
+    };
   }, []);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    let cancelled = false;
+
+    async function loadOnMount() {
+      const data = await fetchBundlesData();
+      if (!cancelled) {
+        setBundles(data.bundles);
+        setProducts(data.products);
+        setBundleProducts(data.bundleProducts);
+      }
+    }
+
+    void loadOnMount();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchBundlesData]);
 
   async function create() {
     setSaving(true);
-    const payload: Record<string, unknown> = {
+    const payload: BundleInsert = {
       slug: form.slug.toLowerCase().trim().replace(/\s+/g, "-"),
       name: form.name,
       description: form.description || null,
       price_cents: form.price_cents,
       currency: form.currency,
       compare_price_cents: form.compare_price_cents || null,
+      valid_from: form.valid_from ? new Date(form.valid_from).toISOString() : null,
+      valid_until: form.valid_until ? new Date(form.valid_until).toISOString() : null,
       is_active: true,
     };
-    if (form.valid_from) payload.valid_from = new Date(form.valid_from).toISOString();
-    if (form.valid_until) payload.valid_until = new Date(form.valid_until).toISOString();
 
-    const { data, error } = await (supabase.from("bundles") as any).insert(payload).select("id").single() as { data: { id: string } | null; error: unknown };
+    const { data, error } = await supabase.from("bundles").insert(payload).select("id").single();
     if (error || !data) {
       setSaving(false);
       showToast((error as { message: string })?.message ?? "Failed to create bundle", "error");
@@ -675,23 +849,30 @@ function BundlesSection() {
     }
 
     if (form.selectedProducts.length > 0) {
-      const links = form.selectedProducts.map((pid) => ({ bundle_id: data.id, product_id: pid }));
-      await (supabase.from("bundle_products") as any).insert(links);
+      const links: BundleProductInsert[] = form.selectedProducts.map((pid) => ({ bundle_id: data.id, product_id: pid }));
+      await supabase.from("bundle_products").insert(links);
     }
 
     setSaving(false);
     showToast("Bundle created", "success");
     setShowCreate(false);
-    load();
+    const data = await fetchBundlesData();
+    setBundles(data.bundles);
+    setProducts(data.products);
+    setBundleProducts(data.bundleProducts);
   }
 
   async function toggleActive(b: BundleRow) {
-    const { error } = await (supabase.from("bundles") as any).update({ is_active: !b.is_active }).eq("id", b.id);
+    const bundleUpdate: BundleUpdate = { is_active: !b.is_active };
+    const { error } = await supabase.from("bundles").update(bundleUpdate).eq("id", b.id);
     if (error) {
       showToast((error as { message: string }).message, "error");
     } else {
       showToast(b.is_active ? "Bundle deactivated" : "Bundle activated", "success");
-      load();
+      const data = await fetchBundlesData();
+      setBundles(data.bundles);
+      setProducts(data.products);
+      setBundleProducts(data.bundleProducts);
     }
   }
 
@@ -705,8 +886,10 @@ function BundlesSection() {
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-semibold text-text-primary">{bundles.length} bundle{bundles.length !== 1 ? "s" : ""}</h2>
-        <button onClick={() => setShowCreate(!showCreate)} className="px-4 py-2 text-xs font-semibold rounded-lg bg-teal text-navy hover:bg-teal/90 transition-colors cursor-pointer">
+        <h2 className="text-sm font-semibold text-text-primary">
+          {bundles.length} bundle{bundles.length !== 1 ? "s" : ""}
+        </h2>
+        <button onClick={() => setShowCreate(!showCreate)} className="px-4 py-2 text-xs font-semibold rounded-lg bg-teal text-btn-text hover:bg-teal/90 transition-colors cursor-pointer">
           {showCreate ? "Cancel" : "+ New Bundle"}
         </button>
       </div>
@@ -716,7 +899,13 @@ function BundlesSection() {
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             <div>
               <label className="text-[10px] text-text-dim uppercase tracking-wider">Name</label>
-              <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value, slug: e.target.value.toLowerCase().replace(/\s+/g, "-") })} className={inputClass} style={{ borderColor: "var(--theme-border)" }} />
+              <input
+                type="text"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value, slug: e.target.value.toLowerCase().replace(/\s+/g, "-") })}
+                className={inputClass}
+                style={{ borderColor: "var(--theme-border)" }}
+              />
             </div>
             <div>
               <label className="text-[10px] text-text-dim uppercase tracking-wider">Slug</label>
@@ -724,32 +913,65 @@ function BundlesSection() {
             </div>
             <div>
               <label className="text-[10px] text-text-dim uppercase tracking-wider">Price (paise/cents)</label>
-              <input type="number" value={form.price_cents} onChange={(e) => setForm({ ...form, price_cents: +e.target.value })} className={inputClass} style={{ borderColor: "var(--theme-border)" }} />
+              <input
+                type="number"
+                value={form.price_cents}
+                onChange={(e) => setForm({ ...form, price_cents: +e.target.value })}
+                className={inputClass}
+                style={{ borderColor: "var(--theme-border)" }}
+              />
             </div>
             <div>
               <label className="text-[10px] text-text-dim uppercase tracking-wider">Compare Price</label>
-              <input type="number" value={form.compare_price_cents} onChange={(e) => setForm({ ...form, compare_price_cents: +e.target.value })} className={inputClass} style={{ borderColor: "var(--theme-border)" }} />
+              <input
+                type="number"
+                value={form.compare_price_cents}
+                onChange={(e) => setForm({ ...form, compare_price_cents: +e.target.value })}
+                className={inputClass}
+                style={{ borderColor: "var(--theme-border)" }}
+              />
             </div>
             <div>
               <label className="text-[10px] text-text-dim uppercase tracking-wider">Valid From</label>
-              <input type="datetime-local" value={form.valid_from} onChange={(e) => setForm({ ...form, valid_from: e.target.value })} className={inputClass} style={{ borderColor: "var(--theme-border)" }} />
+              <input
+                type="datetime-local"
+                value={form.valid_from}
+                onChange={(e) => setForm({ ...form, valid_from: e.target.value })}
+                className={inputClass}
+                style={{ borderColor: "var(--theme-border)" }}
+              />
             </div>
             <div>
               <label className="text-[10px] text-text-dim uppercase tracking-wider">Valid Until</label>
-              <input type="datetime-local" value={form.valid_until} onChange={(e) => setForm({ ...form, valid_until: e.target.value })} className={inputClass} style={{ borderColor: "var(--theme-border)" }} />
+              <input
+                type="datetime-local"
+                value={form.valid_until}
+                onChange={(e) => setForm({ ...form, valid_until: e.target.value })}
+                className={inputClass}
+                style={{ borderColor: "var(--theme-border)" }}
+              />
             </div>
             <div className="col-span-2 md:col-span-3">
               <label className="text-[10px] text-text-dim uppercase tracking-wider">Products in Bundle</label>
               <div className="flex flex-wrap gap-2 mt-1">
                 {products.map((p) => (
-                  <button key={p.id} type="button" onClick={() => toggleProduct(p.id)} className={`px-3 py-1.5 text-xs rounded-lg border transition-colors cursor-pointer ${form.selectedProducts.includes(p.id) ? "border-teal/50 bg-teal/10 text-teal" : "border-[var(--theme-border)] text-text-muted hover:border-teal/30"}`}>
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => toggleProduct(p.id)}
+                    className={`px-3 py-1.5 text-xs rounded-lg border transition-colors cursor-pointer ${form.selectedProducts.includes(p.id) ? "border-teal/50 bg-teal/10 text-teal" : "border-[var(--theme-border)] text-text-muted hover:border-teal/30"}`}
+                  >
                     {p.title}
                   </button>
                 ))}
               </div>
             </div>
             <div className="col-span-2 md:col-span-3 flex justify-end">
-              <button onClick={create} disabled={saving || !form.name || !form.price_cents} className="px-4 py-2 text-xs font-semibold rounded-lg bg-teal text-navy hover:bg-teal/90 transition-colors cursor-pointer disabled:opacity-50">
+              <button
+                onClick={create}
+                disabled={saving || !form.name || !form.price_cents}
+                className="px-4 py-2 text-xs font-semibold rounded-lg bg-teal text-btn-text hover:bg-teal/90 transition-colors cursor-pointer disabled:opacity-50"
+              >
                 {saving ? "Creating..." : "Create Bundle"}
               </button>
             </div>
@@ -764,18 +986,24 @@ function BundlesSection() {
               <div>
                 <div className="flex items-center gap-2">
                   <h3 className="text-sm font-semibold text-text-primary">{b.name}</h3>
-                  <span className={`px-2 py-0.5 rounded text-[9px] font-medium ${b.is_active ? "bg-green-500/10 text-green-400 border border-green-500/20" : "bg-red-500/10 text-red-400 border border-red-500/20"}`}>
+                  <span
+                    className={`px-2 py-0.5 rounded text-[9px] font-medium ${b.is_active ? "bg-green-500/10 text-green-400 border border-green-500/20" : "bg-red-500/10 text-red-400 border border-red-500/20"}`}
+                  >
                     {b.is_active ? "Active" : "Inactive"}
                   </span>
                 </div>
                 <p className="text-xs text-text-dim mt-1">
                   {formatPrice(b.price_cents, b.currency)}
                   {b.compare_price_cents != null && <span className="ml-1 line-through">{formatPrice(b.compare_price_cents, b.currency)}</span>}
-                  {" · "}{(bundleProducts[b.id] ?? []).length} product{(bundleProducts[b.id] ?? []).length !== 1 ? "s" : ""}
+                  {" · "}
+                  {(bundleProducts[b.id] ?? []).length} product{(bundleProducts[b.id] ?? []).length !== 1 ? "s" : ""}
                   {b.valid_until && ` · Until ${new Date(b.valid_until).toLocaleDateString()}`}
                 </p>
               </div>
-              <button onClick={() => toggleActive(b)} className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors cursor-pointer ${b.is_active ? "border-red-500/30 text-red-400 hover:bg-red-500/10" : "border-green-500/30 text-green-400 hover:bg-green-500/10"}`}>
+              <button
+                onClick={() => toggleActive(b)}
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors cursor-pointer ${b.is_active ? "border-red-500/30 text-red-400 hover:bg-red-500/10" : "border-green-500/30 text-green-400 hover:bg-green-500/10"}`}
+              >
                 {b.is_active ? "Deactivate" : "Activate"}
               </button>
             </div>

@@ -23,10 +23,7 @@ export default function CouponInput({ productId, priceCents, currency, onApply }
     setLoading(true);
 
     // Fetch the coupon
-    const { data, error } = await (supabase.from("coupons") as any)
-      .select("*")
-      .eq("code", code.toUpperCase().trim())
-      .single() as { data: Record<string, unknown> | null; error: unknown };
+    const { data, error } = await supabase.from("coupons").select("*").eq("code", code.toUpperCase().trim()).single();
 
     if (error || !data) {
       setLoading(false);
@@ -42,14 +39,14 @@ export default function CouponInput({ productId, priceCents, currency, onApply }
     }
 
     // Validate date range
-    if (data.valid_until && new Date(data.valid_until as string) < new Date()) {
+    if (data.valid_until && new Date(data.valid_until) < new Date()) {
       setLoading(false);
       showToast("This coupon has expired", "error");
       return;
     }
 
     // Validate usage limits
-    if (data.max_uses != null && (data.used_count as number) >= (data.max_uses as number)) {
+    if (data.max_uses != null && data.used_count >= data.max_uses) {
       setLoading(false);
       showToast("This coupon has reached its usage limit", "error");
       return;
@@ -63,24 +60,24 @@ export default function CouponInput({ productId, priceCents, currency, onApply }
     }
 
     // Validate minimum purchase
-    if (priceCents < (data.min_purchase_cents as number)) {
+    if (priceCents < data.min_purchase_cents) {
       setLoading(false);
-      showToast(`Minimum purchase of ${formatAmount((data.min_purchase_cents as number), currency)} required`, "error");
+      showToast(`Minimum purchase of ${formatAmount(data.min_purchase_cents, currency)} required`, "error");
       return;
     }
 
     // Calculate discount
     let discountCents: number;
     if (data.coupon_type === "percent") {
-      discountCents = Math.round(priceCents * (data.discount_value as number) / 100);
+      discountCents = Math.round((priceCents * data.discount_value) / 100);
     } else {
-      discountCents = data.discount_value as number;
+      discountCents = data.discount_value;
     }
     discountCents = Math.min(discountCents, priceCents);
 
     setLoading(false);
-    setApplied({ code: data.code as string, discountCents });
-    onApply(discountCents, data.id as string, data.code as string);
+    setApplied({ code: data.code, discountCents });
+    onApply(discountCents, data.id, data.code);
     showToast(`Coupon applied! You save ${formatAmount(discountCents, currency)}`, "success");
   }
 
@@ -101,7 +98,9 @@ export default function CouponInput({ productId, priceCents, currency, onApply }
         <span className="text-xs text-green-400 font-medium flex-1">
           {applied.code} &mdash; {formatAmount(applied.discountCents, currency)} off
         </span>
-        <button onClick={remove} className="text-xs text-text-dim hover:text-red-400 transition-colors cursor-pointer">Remove</button>
+        <button onClick={remove} className="text-xs text-text-dim hover:text-red-400 transition-colors cursor-pointer">
+          Remove
+        </button>
       </div>
     );
   }

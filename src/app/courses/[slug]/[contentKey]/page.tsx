@@ -2,6 +2,7 @@ import { getCourseBySlug } from "@/lib/courses/registry";
 import { fetchContentIndex, fetchMarkdownContent, getContentEntry, stripFrontmatter } from "@/lib/courses/content-loader";
 import MarkdownRenderer from "@/components/docs/MarkdownRenderer";
 import PremiumGate from "@/components/courses/PremiumGate";
+import CourseContentNav from "@/components/courses/CourseContentNav";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -54,12 +55,7 @@ export default async function ContentPage({ params }: PageProps) {
           <span>/</span>
           <span className="text-amber-400">{contentKey}</span>
         </div>
-        <PremiumGate
-          title={contentKey.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}
-          tags={[]}
-          slug={slug}
-          contentKey={contentKey}
-        />
+        <PremiumGate title={contentKey.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())} tags={[]} slug={slug} contentKey={contentKey} />
       </div>
     );
   }
@@ -79,13 +75,7 @@ export default async function ContentPage({ params }: PageProps) {
           <span>/</span>
           <span className="text-amber-400">{contentKey}</span>
         </div>
-        <PremiumGate
-          title={contentEntry.title}
-          tags={contentEntry.tags}
-          slug={slug}
-          storagePath={contentEntry.sourcePath}
-          contentKey={contentKey}
-        />
+        <PremiumGate title={contentEntry.title} tags={contentEntry.tags} slug={slug} storagePath={contentEntry.sourcePath} contentKey={contentKey} />
       </div>
     );
   }
@@ -147,41 +137,7 @@ export default async function ContentPage({ params }: PageProps) {
       {/* Markdown content */}
       <MarkdownRenderer content={markdown} linkMap={linkMap} />
 
-      {/* Prev / Next navigation */}
-      <div className="mt-16 pt-8 border-t border-[var(--theme-border)] flex items-center justify-between gap-4">
-        {prev ? (
-          <Link href={`${basePath}/courses/${slug}/${prev.contentKey}/`} className="group flex flex-col items-start text-sm">
-            <span className="text-[10px] text-text-dim uppercase tracking-wider mb-1">Previous</span>
-            <span className="text-text-muted group-hover:text-teal transition-colors flex items-center gap-1">
-              &larr; {prev.title}
-              {prev.accessLevel === "premium" && (
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-amber-400/60">
-                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                  <path d="M7 11V7a5 5 0 0110 0v4" />
-                </svg>
-              )}
-            </span>
-          </Link>
-        ) : (
-          <div />
-        )}
-        {next ? (
-          <Link href={`${basePath}/courses/${slug}/${next.contentKey}/`} className="group flex flex-col items-end text-sm">
-            <span className="text-[10px] text-text-dim uppercase tracking-wider mb-1">Next</span>
-            <span className="text-text-muted group-hover:text-teal transition-colors flex items-center gap-1">
-              {next.title} &rarr;
-              {next.accessLevel === "premium" && (
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-amber-400/60">
-                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                  <path d="M7 11V7a5 5 0 0110 0v4" />
-                </svg>
-              )}
-            </span>
-          </Link>
-        ) : (
-          <div />
-        )}
-      </div>
+      <CourseContentNav slug={slug} prev={prev} next={next} />
     </div>
   );
 }
