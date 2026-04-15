@@ -176,6 +176,21 @@ jobs:
             -H "Content-Type: application/json" -d '{}'
           echo "Views refreshed."
 
+          # ── Step 3b: Refresh flat aggregation tables ──
+          for RPC_NAME in refresh_wb_aggregations refresh_wb_bar_race; do
+            echo "Calling $RPC_NAME..."
+            RPC_HTTP=$(curl -s -o /tmp/rpc_out.json -w "%{http_code}" --max-time 120 \
+              -X POST "${SUPABASE_URL}/rest/v1/rpc/${RPC_NAME}" \
+              -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+              -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+              -H "Content-Type: application/json" -d '{}')
+            if [ "$RPC_HTTP" -ge 200 ] 2>/dev/null && [ "$RPC_HTTP" -lt 300 ] 2>/dev/null; then
+              echo "$RPC_NAME OK"
+            else
+              echo "::warning::$RPC_NAME failed: HTTP $RPC_HTTP"
+            fi
+          done
+
           # ── Step 4: Create sync run record ──
           jq -n \
             --arg status "completed" \
