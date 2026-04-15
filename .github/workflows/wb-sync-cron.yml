@@ -1,0 +1,73 @@
+name: World Bank Data Sync
+
+on:
+  schedule:
+    # Daily at 02:00 UTC
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+    inputs:
+      countries:
+        description: "Comma-separated country codes (e.g. IND,USA,CHN,GBR)"
+        required: false
+        default: "IND,USA,CHN,GBR"
+      indicators:
+        description: "Comma-separated indicator codes"
+        required: false
+        default: "NY.GDP.MKTP.CD,NY.GDP.PCAP.CD,SP.POP.TOTL"
+
+jobs:
+  sync:
+    name: Sync World Bank Indicators
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build request body
+        id: body
+        run: |
+          # Use inputs if manually triggered, otherwise defaults
+          COUNTRIES="${{ github.event.inputs.countries || 'IND,USA,CHN,GBR' }}"
+          INDICATORS="${{ github.event.inputs.indicators || 'NY.GDP.MKTP.CD,NY.GDP.PCAP.CD,SP.POP.TOTL' }}"
+
+          # Convert comma-separated to JSON arrays
+          COUNTRIES_JSON=$(echo "$COUNTRIES" | jq -R 'split(",")')
+          INDICATORS_JSON=$(echo "$INDICATORS" | jq -R 'split(",")')
+
+          BODY=$(jq -n \
+            --argjson countries "$COUNTRIES_JSON" \
+            --argjson indicators "$INDICATORS_JSON" \
+            '{countries: $countries, indicators: $indicators}')
+
+          echo "body=$BODY" >> "$GITHUB_OUTPUT"
+          echo "Sync request body: $BODY"
+
+      - name: Trigger wb-sync Edge Function
+        id: sync
+        run: |
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -X POST \
+            "${{ secrets.SUPABASE_URL }}/functions/v1/wb-sync" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '${{ steps.body.outputs.body }}')
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          echo "HTTP Status: $HTTP_CODE"
+          echo "Response: $BODY"
+
+          echo "status=$HTTP_CODE" >> "$GITHUB_OUTPUT"
+          echo "response=$BODY" >> "$GITHUB_OUTPUT"
+
+          if [ "$HTTP_CODE" -ge 400 ]; then
+            echo "::error::Sync failed with HTTP $HTTP_CODE: $BODY"
+            exit 1
+          fi
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## World Bank Data Sync" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status:** ${{ steps.sync.outputs.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Response:** \`${{ steps.sync.outputs.response }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Triggered at:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
