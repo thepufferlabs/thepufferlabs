@@ -7,11 +7,28 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const WB_API_BASE = "https://api.worldbank.org/v2";
 const DEFAULT_COUNTRIES = ["IND", "USA", "CHN", "GBR"];
 const DEFAULT_INDICATORS = [
-  "NY.GDP.MKTP.CD", // GDP
-  "NY.GDP.PCAP.CD", // GDP per capita
-  "SP.POP.TOTL",    // Population
+  "NY.GDP.MKTP.CD",   // GDP (current US$)
+  "NY.GDP.MKTP.KD.ZG",// GDP growth (annual %)
+  "NY.GDP.PCAP.CD",   // GDP per capita (current US$)
+  "NY.GDP.PCAP.KD.ZG",// GDP per capita growth (annual %)
+  "FP.CPI.TOTL.ZG",   // Inflation, consumer prices (annual %)
+  "NE.TRD.GNFS.ZS",   // Trade (% of GDP)
+  "BX.KLT.DINV.CD.WD",// Foreign direct investment, net inflows (BoP, current US$)
+  "SL.UEM.TOTL.ZS",   // Unemployment, total (% of total labor force)
+  "SL.TLF.CACT.ZS",   // Labor force participation rate (% of total population ages 15+)
+  "SP.POP.TOTL",       // Population, total
+  "SP.POP.GROW",       // Population growth (annual %)
+  "SP.URB.TOTL.IN.ZS", // Urban population (% of total population)
+  "SP.DYN.LE00.IN",    // Life expectancy at birth, total (years)
+  "SH.XPD.CHEX.GD.ZS", // Current health expenditure (% of GDP)
+  "SE.ADT.LITR.ZS",   // Literacy rate, adult total (% of people ages 15 and above)
+  "SE.XPD.TOTL.GD.ZS",// Government expenditure on education, total (% of GDP)
+  "EG.USE.ELEC.KH.PC", // Electric power consumption (kWh per capita)
+  "IT.NET.USER.ZS",   // Individuals using the Internet (% of population)
+  "EN.ATM.CO2E.PC",   // CO2 emissions (metric tons per capita)
+  "NY.GNP.PCAP.CD",   // GNI per capita, Atlas method (current US$)
 ];
-const PER_PAGE = 500;
+const PER_PAGE = 1000;
 const MAX_RETRIES = 3;
 const RATE_LIMIT_DELAY_MS = 1000; // 1s between API calls
 
@@ -244,11 +261,15 @@ Deno.serve(async (req) => {
   // Parse optional overrides from request body
   let countries = DEFAULT_COUNTRIES;
   let indicators = DEFAULT_INDICATORS;
+  let batchId: string | null = null;
+  let source = "world_bank";
   try {
     if (req.method === "POST") {
       const body = await req.json();
       if (body.countries?.length) countries = body.countries;
       if (body.indicators?.length) indicators = body.indicators;
+      if (body.batch_id) batchId = body.batch_id;
+      if (body.source) source = body.source;
     }
   } catch {
     // Use defaults
@@ -263,13 +284,17 @@ Deno.serve(async (req) => {
   }
 
   // Create sync run record
+  const runInsert: Record<string, unknown> = {
+    status: "running",
+    indicators,
+    countries,
+    source,
+  };
+  if (batchId) runInsert.batch_id = batchId;
+
   const { data: runData, error: runError } = await supabase
     .from("wb_sync_runs")
-    .insert({
-      status: "running",
-      indicators,
-      countries,
-    })
+    .insert(runInsert)
     .select("run_id")
     .single();
 
@@ -282,21 +307,73 @@ Deno.serve(async (req) => {
   }
 
   const runId = runData.run_id;
-  log("info", "Sync run started", { runId, indicators, countries });
+  log("info", "Sync run started", {
+    runId,
+    batch_id: batchId,
+    source,
+    indicator_count: indicators.length,
+    country_count: countries.length,
+    indicators,
+    countries,
+  });
 
   const totalStats: SyncStats = { rows_inserted: 0, rows_updated: 0, rows_skipped: 0 };
 
   try {
     // Process each indicator sequentially (respect rate limits)
     for (const indicator of indicators) {
-      log("info", "Processing indicator", { indicator, runId });
+      log("info", "Processing indicator", {
+        indicator,
+        runId,
+        country_count: countries.length,
+        progress: `${indicators.indexOf(indicator) + 1}/${indicators.length}`,
+      });
 
-      const data = await fetchIndicatorData(indicator, countries, runId, supabase);
-      const stats = await upsertIndicatorValues(data, supabase);
+      try {
+        const data = await fetchIndicatorData(indicator, countries, runId, supabase);
 
-      totalStats.rows_inserted += stats.rows_inserted;
-      totalStats.rows_updated += stats.rows_updated;
-      totalStats.rows_skipped += stats.rows_skipped;
+        if (data.length === 0) {
+          log("warn", "No data returned for indicator", { indicator, countries });
+          continue;
+        }
+
+        // Upsert country metadata from the API response
+        const countryMap = new Map<string, { name: string; iso3: string }>();
+        for (const d of data) {
+          if (d.countryiso3code && d.country?.value) {
+            countryMap.set(d.countryiso3code, {
+              name: d.country.value,
+              iso3: d.countryiso3code,
+            });
+          }
+        }
+        if (countryMap.size > 0) {
+          const countryRows = Array.from(countryMap.values()).map((c) => ({
+            country_code: c.iso3,
+            country_name: c.name,
+          }));
+          const { error: metaError } = await supabase
+            .from("wb_countries")
+            .upsert(countryRows, { onConflict: "country_code", ignoreDuplicates: true });
+          if (metaError) {
+            log("warn", "Country metadata upsert failed (non-fatal)", {
+              error: metaError.message,
+            });
+          }
+        }
+
+        const stats = await upsertIndicatorValues(data, supabase);
+
+        totalStats.rows_inserted += stats.rows_inserted;
+        totalStats.rows_updated += stats.rows_updated;
+        totalStats.rows_skipped += stats.rows_skipped;
+      } catch (indicatorErr) {
+        log("error", "Failed to process indicator (continuing)", {
+          indicator,
+          error: (indicatorErr as Error).message,
+        });
+        // Continue with next indicator instead of failing the whole sync
+      }
     }
 
     // Refresh materialized views

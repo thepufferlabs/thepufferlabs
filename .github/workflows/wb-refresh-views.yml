@@ -1,0 +1,52 @@
+name: Refresh Analytics Views
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["World Bank Full Crawl"]
+    types: [completed]
+
+jobs:
+  refresh:
+    name: Refresh Materialized Views
+    runs-on: ubuntu-latest
+    # Only run if the triggering workflow succeeded (or if manually dispatched)
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    steps:
+      - name: Call refresh RPC
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          # Write empty JSON body to file
+          echo '{}' > /tmp/rpc-body.json
+
+          HTTP_CODE=$(curl -s -o /tmp/rpc-response.json -w "%{http_code}" \
+            --max-time 120 \
+            -X POST \
+            "${SUPABASE_URL}/rest/v1/rpc/refresh_wb_materialized_views" \
+            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Content-Type: application/json" \
+            -d @/tmp/rpc-body.json)
+
+          echo "HTTP Status: $HTTP_CODE"
+          RESPONSE=$(cat /tmp/rpc-response.json 2>/dev/null || echo "No response")
+          echo "Response: $RESPONSE"
+
+          echo "## Refresh Materialized Views" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **HTTP Status:** $HTTP_CODE" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Triggered at:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          echo "$RESPONSE" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$HTTP_CODE" -ge 400 ]; then
+            echo "::error::Refresh failed with HTTP $HTTP_CODE"
+            exit 1
+          fi
+
+          echo "Materialized views refreshed successfully."

@@ -9,7 +9,12 @@ import EconomicBubbleChart from "@/components/analytics/WorldMapChart";
 import KPICard from "@/components/analytics/KPICard";
 import CountrySelector from "@/components/analytics/CountrySelector";
 import DataTable from "@/components/analytics/DataTable";
+import PremiumBanner from "@/components/analytics/PremiumBanner";
 import { fetchDashboardData } from "@/lib/wb/api";
+import { useAuth } from "@/components/AuthProvider";
+import { useCart } from "@/components/CartProvider";
+import { supabase } from "@/lib/supabase";
+import AuthModal from "@/components/ui/AuthModal";
 import type { DashboardData, IndicatorTrend, LatestValue } from "@/lib/wb/types";
 
 const ALL_COUNTRIES = ["IND", "USA", "CHN", "GBR"];
@@ -19,6 +24,11 @@ export default function AnalyticsPage() {
   const [selectedCountries, setSelectedCountries] = useState<string[]>(ALL_COUNTRIES);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [authOpen, setAuthOpen] = useState(false);
+  const [hasAccess, setHasAccess] = useState(false);
+
+  const { user, loading: authLoading } = useAuth();
+  const { addItem } = useCart();
 
   useEffect(() => {
     fetchDashboardData()
@@ -31,6 +41,47 @@ export default function AnalyticsPage() {
         setLoading(false);
       });
   }, []);
+
+  // Check if user has entitlement for the analytics product
+  useEffect(() => {
+    async function checkEntitlement() {
+      if (!user) {
+        setHasAccess(false);
+        return;
+      }
+      try {
+        const { data: product } = await supabase.from("products").select("id").eq("slug", "data-analytics-platform").single();
+
+        if (!product) {
+          setHasAccess(false);
+          return;
+        }
+
+        const { data: entitlement } = await supabase.from("user_entitlements").select("id").eq("user_id", user.id).eq("product_id", product.id).eq("is_active", true).limit(1);
+
+        setHasAccess(!!(entitlement && entitlement.length > 0));
+      } catch {
+        setHasAccess(false);
+      }
+    }
+
+    if (!authLoading) {
+      checkEntitlement();
+    }
+  }, [user, authLoading]);
+
+  function handlePurchase(productSlug: string) {
+    addItem({
+      productId: productSlug,
+      slug: productSlug,
+      title: productSlug === "data-analytics-platform" ? "Data Analytics Platform" : "Software Engineering Course",
+      priceCents: productSlug === "data-analytics-platform" ? 4900 : 7900,
+      salePriceCents: null,
+      saleEndsAt: null,
+      currency: "usd",
+      thumbnailUrl: "",
+    });
+  }
 
   const toggleCountry = useCallback((code: string) => {
     setSelectedCountries((prev) => (prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]));
@@ -81,6 +132,14 @@ export default function AnalyticsPage() {
 
   return (
     <main className="min-h-screen pb-20">
+      {/* Auth Modal */}
+      <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} />
+
+      {/* Premium Banner */}
+      <SectionWrapper className="pt-8 pb-0 md:pt-12">
+        <PremiumBanner isAuthenticated={!!user} hasAccess={hasAccess} onAuthRequired={() => setAuthOpen(true)} onPurchase={handlePurchase} />
+      </SectionWrapper>
+
       {/* Hero / Header */}
       <SectionWrapper className="pt-8 pb-0 md:pt-12">
         <SectionHeading
