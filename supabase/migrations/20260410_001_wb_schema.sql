@@ -189,6 +189,17 @@ ALTER TABLE wb_indicator_values ENABLE ROW LEVEL SECURITY;
 ALTER TABLE wb_raw_observations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE wb_sync_runs ENABLE ROW LEVEL SECURITY;
 
+-- Drop existing policies first (idempotent re-runs)
+DROP POLICY IF EXISTS "Public read wb_countries"      ON wb_countries;
+DROP POLICY IF EXISTS "Public read wb_indicators"     ON wb_indicators;
+DROP POLICY IF EXISTS "Public read wb_indicator_values" ON wb_indicator_values;
+DROP POLICY IF EXISTS "Public read wb_sync_runs"      ON wb_sync_runs;
+DROP POLICY IF EXISTS "Service write wb_countries"       ON wb_countries;
+DROP POLICY IF EXISTS "Service write wb_indicators"      ON wb_indicators;
+DROP POLICY IF EXISTS "Service write wb_indicator_values" ON wb_indicator_values;
+DROP POLICY IF EXISTS "Service write wb_raw_observations" ON wb_raw_observations;
+DROP POLICY IF EXISTS "Service write wb_sync_runs"       ON wb_sync_runs;
+
 -- Public read access for analytics
 CREATE POLICY "Public read wb_countries"      ON wb_countries      FOR SELECT USING (true);
 CREATE POLICY "Public read wb_indicators"     ON wb_indicators     FOR SELECT USING (true);
